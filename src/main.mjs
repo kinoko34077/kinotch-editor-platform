@@ -62,8 +62,10 @@ editor.on('load',()=>{
       btn.setAttribute('aria-pressed',String(targets.some(el=>el.dataset.spikeId===btn.dataset.selectId)));
     }
   }
-  selecto.on('select',e=>chosen(e.selected));
+  // Do not let Selecto retarget Moveable midway through an active transform.
+  selecto.on('select',e=>{if(!gate.active)chosen(e.selected);});
   let ongoingId=null;
+  let groupTargets=[];
   // Moveable's official group events give per-target coordinates. A group is
   // previewed freely but written atomically once through one canonical revision.
   function groupStart(kind,e){
@@ -74,6 +76,7 @@ editor.on('load',()=>{
     }));
     if(!gate.begin(kind,'group',baseline)){e.stop?.();return;}
     ongoingId='group';
+    groupTargets=targets;
     document.querySelector('#canvas').dataset.lastGroupEvent=kind+':start:'+targets.length;
   }
   function groupPreview(kind,e){
@@ -103,6 +106,12 @@ editor.on('load',()=>{
       sync();show(kind+': group committed at revision '+model.revision);
     }catch(error){gate.cancel();sync();show('複数選択の操作保留: '+error.message);}
     ongoingId=null;
+    if(groupTargets.length){
+      const alive=groupTargets.filter(el=>el.isConnected);
+      selecto.setSelectedTargets(alive);
+      chosen(alive);
+    }
+    groupTargets=[];
     document.querySelector('#canvas').dataset.lastGroupEvent=kind+':end';
   }
   moveable.on('dragGroupStart',e=>groupStart('group-drag',e));
@@ -144,6 +153,7 @@ editor.on('load',()=>{
     label.type='button';label.dataset.selectId=element.id;label.textContent=element.label;
     label.setAttribute('aria-pressed','false');
     label.addEventListener('click',ev=>{
+      if(gate.active)return;
       const target=locate(element.id);
       if(!target)return;
       const previous=selecto.getSelectedTargets().filter(el=>el?.isConnected);
