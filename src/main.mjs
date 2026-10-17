@@ -58,6 +58,9 @@ editor.on('load',()=>{
   function chosen(els){const targets=els.filter(el=>el?.matches?.('[data-spike-id]'));
     moveable.target=targets.length===1?targets[0]:(targets.length?targets:[]);
     document.querySelector('#canvas').dataset.selectedIds=targets.map(el=>el.dataset.spikeId).join(','); // M0 test fixture diagnostic
+    for(const btn of document.querySelectorAll('#layers [data-select-id]')){
+      btn.setAttribute('aria-pressed',String(targets.some(el=>el.dataset.spikeId===btn.dataset.selectId)));
+    }
   }
   selecto.on('select',e=>chosen(e.selected));
   let ongoingId=null;
@@ -132,7 +135,22 @@ editor.on('load',()=>{
   const manager=new DragDropManager();const registers=[];
   for(const element of seed){const li=document.createElement('li');li.dataset.id=element.id;
     const handle=document.createElement('button');handle.type='button';handle.textContent='↕';handle.setAttribute('aria-label',`${element.label} を並べ替え`);
-    const label=document.createElement('span');label.textContent=element.label;
+    // Keyboard-available, explicit multi-select route. Selecto's documented
+    // setSelectedTargets API does not itself emit a selection event, so sync both views.
+    const label=document.createElement('button');
+    label.type='button';label.dataset.selectId=element.id;label.textContent=element.label;
+    label.setAttribute('aria-pressed','false');
+    label.addEventListener('click',ev=>{
+      const target=locate(element.id);
+      if(!target)return;
+      const previous=selecto.getSelectedTargets().filter(el=>el?.isConnected);
+      const additive=ev.shiftKey||ev.ctrlKey||ev.metaKey;
+      const next=!additive?[target]:previous.includes(target)
+        ?previous.filter(el=>el!==target):[...previous,target];
+      selecto.setSelectedTargets(next);
+      chosen(next);
+      show('選択: '+next.map(el=>el.dataset.spikeId).join(', '));
+    });
     li.append(handle,label);list.append(li);
     registers.push(new Draggable({id:'layer:'+element.id,element:li,handle},manager));
     registers.push(new Droppable({id:'target:'+element.id,element:li},manager));
