@@ -87,7 +87,13 @@ try{
   const expectedIds=['block-c','block-a','block-b'];
   assert.deepEqual(reordered.elements.map(e=>e.id),expectedIds,
     'dnd-kit reorder did not commit to canonical model; '+await page.locator('#status').textContent());
-  assert.deepEqual(await page.locator('#layers li').evaluateAll(els=>els.map(e=>e.dataset.id)),expectedIds,'sidebar differs from canonical order');
+  // dnd-kit adds a temporary drag representation until its drop animation settles.
+  // A persistent duplicate is a genuine UI bug: wait for settlement, then assert exact rows.
+  await page.waitForFunction(expected=>{
+    const rows=[...document.querySelectorAll('#layers li')].map(e=>e.dataset.id);
+    return rows.length===expected.length&&rows.every((id,i)=>id===expected[i]);
+  },expectedIds,{timeout:4000});
+  assert.deepEqual(await page.locator('#layers li').evaluateAll(els=>els.map(e=>e.dataset.id)),expectedIds,'sidebar differs from canonical order after settling');
   assert.deepEqual(await frame.locator('[data-spike-id]').evaluateAll(els=>els.map(e=>e.dataset.spikeId)),expectedIds,'GrapesJS document differs from canonical order');
   await page.getByRole('button',{name:'元に戻す'}).click();
   await page.getByRole('button',{name:'JSONを表示'}).click();
