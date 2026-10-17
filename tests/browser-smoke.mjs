@@ -98,7 +98,13 @@ try{
   const groupAfter=JSON.parse(await page.locator('#dump').textContent());
   const aAfter=groupAfter.elements.find(e=>e.id==='block-a').geometry;
   const bAfter=groupAfter.elements.find(e=>e.id==='block-b').geometry;
-  assert.equal(groupAfter.revision,groupBefore.revision+1,'Group drag must commit once');
+  assert.equal(groupAfter.revision,groupBefore.revision+1,'Group drag must commit once: '+JSON.stringify({
+    lastGroupEvent:await page.locator('#canvas').getAttribute('data-last-group-event'),
+    selected:await page.locator('#canvas').getAttribute('data-selected-ids'),
+    status:await page.locator('#status').textContent(),
+    moveable:await frame.locator('.moveable-control-box').evaluateAll(els=>els.map(x=>({className:x.className,style:x.getAttribute('style'),rect:[x.getBoundingClientRect().width,x.getBoundingClientRect().height]}))),
+    before:{a:aBefore,b:bBefore},after:{a:aAfter,b:bAfter}
+  }));
   assert(aAfter.x!==aBefore.x||aAfter.y!==aBefore.y,'Group drag target A did not move');
   assert(bAfter.x!==bBefore.x||bAfter.y!==bBefore.y,'Group drag target B did not move');
   await page.getByRole('button',{name:'元に戻す'}).click();
