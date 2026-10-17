@@ -69,7 +69,37 @@ try{
   await frame.locator('body').press('Delete');
   assert.equal(await frame.locator('[data-spike-id]').count(),3,'GrapesJS native Delete removed model-owned element');
 
-  // Verify direct resize handle, not just keyboard-free model API updates.
+  // This time Ctrl+Z is issued against a *committed* pointer move, proving
+  // GrapesJS keymaps cannot silently consume its own second history stack.
+  const keyboardStart=await frame.locator('[data-spike-id="block-a"]').boundingBox();
+  const kx=keyboardStart.x+keyboardStart.width/2, ky=keyboardStart.y+keyboardStart.height/2;
+  await page.mouse.move(kx,ky);await page.mouse.down();
+  await page.mouse.move(kx+21,ky+16,{steps:8});await page.mouse.up();
+  await page.getByRole('button',{name:'JSONを表示'}).click();
+  const movedForKeys=JSON.parse(await page.locator('#dump').textContent()).elements.find(e=>e.id==='block-a').geometry;
+  assert(movedForKeys.x!==original.x||movedForKeys.y!==original.y,'Keyboard Undo proof requires a committed move first');
+  await frame.locator('body').press('Control+z');
+  await page.getByRole('button',{name:'JSONを表示'}).click();
+  const restoredByKeys=JSON.parse(await page.locator('#dump').textContent()).elements.find(e=>e.id==='block-a').geometry;
+  assert.deepEqual(restoredByKeys,original,'Ctrl+Z during canvas focus must undo the canonical model');
+  const renderAfterKeys=await frame.locator('[data-spike-id="block-a"]').evaluate(el=>({x:parseFloat(getComputedStyle(el).left),y:parseFloat(getComputedStyle(el).top)}));
+  assert(Math.abs(renderAfterKeys.x-original.x)<1&&Math.abs(renderAfterKeys.y-original.y)<1,'Ctrl+Z left stale DOM geometry '+JSON.stringify(renderAfterKeys));
+
+  // Live pointer cancellation is a separate path from committed Undo. Escape
+  // must abandon preview without modifying the canonical model or leaving CSS.
+  const escapeStart=await frame.locator('[data-spike-id="block-a"]').boundingBox();
+  const ex=escapeStart.x+escapeStart.width/2,ey=escapeStart.y+escapeStart.height/2;
+  await page.mouse.move(ex,ey);await page.mouse.down();
+  await page.mouse.move(ex+26,ey+17,{steps:6});
+  await frame.locator('body').press('Escape');
+  await page.mouse.up();
+  await page.getByRole('button',{name:'JSONを表示'}).click();
+  const afterEscape=JSON.parse(await page.locator('#dump').textContent()).elements.find(e=>e.id==='block-a').geometry;
+  assert.deepEqual(afterEscape,original,'Escape should discard preview without touching canonical state');
+  const renderAfterEscape=await frame.locator('[data-spike-id="block-a"]').evaluate(el=>({x:parseFloat(getComputedStyle(el).left),y:parseFloat(getComputedStyle(el).top)}));
+  assert(Math.abs(renderAfterEscape.x-original.x)<1&&Math.abs(renderAfterEscape.y-original.y)<1,'Escape left stale CSS geometry '+JSON.stringify(renderAfterEscape));
+
+    // Verify direct resize handle, not just keyboard-free model API updates.
   const resizeHandle=frame.locator('.moveable-control[data-direction="se"]');
   assert((await resizeHandle.count())>0,'Southeast Moveable resize handle missing');
   const handleBox=await resizeHandle.first().boundingBox();
@@ -171,6 +201,9 @@ try{
   await page.getByRole('button',{name:'JSONを表示'}).click();
   const restoredResize=JSON.parse(await page.locator('#dump').textContent());
   for(const id of ['block-a','block-b']){
+    const actual=await frame.locator('[data-spike-id="'+id+'"]').evaluate(el=>({x:parseFloat(getComputedStyle(el).left),y:parseFloat(getComputedStyle(el).top),width:parseFloat(getComputedStyle(el).width),height:parseFloat(getComputedStyle(el).height)}));
+    const wanted=beforeResize.elements.find(e=>e.id===id).geometry;
+    for(const key of ['x','y','width','height'])assert(Math.abs(actual[key]-wanted[key])<1,'Group Undo pixels diverge '+id+' '+key+' '+JSON.stringify({actual,wanted}));
     assert.deepEqual(restoredResize.elements.find(e=>e.id===id).geometry,
       beforeResize.elements.find(e=>e.id===id).geometry,'Group resize Undo '+id);
   }
