@@ -84,10 +84,10 @@ try{
   await page.mouse.down();
   await page.mouse.move(right,bottom,{steps:12});
   await page.mouse.up();
-  const groupMarker=frame.locator('.moveable-control-box.moveable-group');
-  const controlClasses=await frame.locator('.moveable-control-box').evaluateAll(els=>els.map(el=>({classes:el.className,descendants:el.querySelectorAll('.moveable-control').length})));
-  const selectionClasses=await frame.locator('[data-spike-id]').evaluateAll(els=>els.map(el=>({id:el.dataset.spikeId,classes:el.className})));
-  assert((await groupMarker.count())>0,'Selecto did not produce Moveable group controls for A+B: '+JSON.stringify({controlClasses,selectionClasses,from:{left,top,right,bottom}}));
+  // Selecto's public select event is the actual proof, not an undocumented
+  // Moveable CSS class. Verify the selected stable targets before group pointer drag.
+  const selected=(await page.locator('#canvas').getAttribute('data-selected-ids')||'').split(',').filter(Boolean);
+  assert.deepEqual(selected.sort(),['block-a','block-b'],'Marquee selection did not select A and B exclusively');
   await page.getByRole('button',{name:'JSONを表示'}).click();
   const groupBefore=JSON.parse(await page.locator('#dump').textContent());
   const aBefore=groupBefore.elements.find(e=>e.id==='block-a').geometry;
