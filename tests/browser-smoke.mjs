@@ -23,9 +23,11 @@ try{
   page.on('pageerror',e=>errors.push(e.message));
   await page.goto('http://127.0.0.1:5173/',{waitUntil:'domcontentloaded'});
   await page.waitForFunction(()=>document.querySelector('#status')?.textContent?.includes('M0実験画面'),null,{timeout:25000});
-  const frame=page.frames().find(f=>f!==page.mainFrame()&&f.url().startsWith('about:'));
-  assert(frame,'GrapesJS editable iframe not found');
-  await frame.waitForSelector('[data-spike-id="block-a"]');
+  const candidates=await Promise.all(page.frames().filter(f=>f!==page.mainFrame()).map(async f=>({frame:f,url:f.url(),specimens:await f.locator('[data-spike-id]').count()})));
+  const match=candidates.find(x=>x.specimens===3);
+  assert(match, 'GrapesJS iframe with 3 target specimens not found: '+JSON.stringify(candidates.map(x=>({url:x.url,specimens:x.specimens}))));
+  const frame=match.frame;
+  await frame.waitForSelector('[data-spike-id="block-a"]',{timeout:5000});
   const specimens=await frame.locator('[data-spike-id]').count();
   assert.equal(specimens,3,'Three specimen elements must be visible in iframe');
   const controls=await frame.locator('.moveable-control-box').count();
