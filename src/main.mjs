@@ -26,9 +26,21 @@ const editor=grapesjs.init({
 });
 const components=()=>editor.getWrapper().find('[data-spike-id]');
 function sync() {
-  for(const e of model.elements){
+  // A single bounded model owns the canonical order and geometry.
+  // Mirror *model* order to GrapesJS' real component collection; sidebar is only a view.
+  const wrapper=editor.getWrapper(), elements=model.elements;
+  for(const [index, e] of elements.entries()){
     const cmp=components().find(c=>c.getAttributes()['data-spike-id']===e.id);
-    if(cmp)cmp.addStyle(styleFor(e.geometry));
+    if(!cmp)throw new Error('missing GrapesJS component: '+e.id);
+    cmp.addStyle(styleFor(e.geometry));
+    if(wrapper.components().indexOf(cmp)!==index)cmp.move(wrapper,{at:index});
+  }
+  const list=document.querySelector('#layers');
+  if(list){
+    for(const e of elements){
+      const node=[...list.children].find(n=>n.dataset.id===e.id);
+      if(node)list.append(node);
+    }
   }
 }
 function locate(id){return editor.Canvas.getBody()?.querySelector(`[data-spike-id="${id}"]`);}
@@ -38,13 +50,57 @@ editor.on('load',()=>{
   const frameBody=editor.Canvas.getBody();
   const frameDoc=frameBody.ownerDocument;
   const moveable=new Moveable(frameBody,{target:locate('block-a'),container:frameBody,draggable:true,resizable:true,origin:false,snappable:true});
-  const selecto=new Selecto({container:frameBody,dragContainer:frameBody,selectableTargets:[...components()].map(c=>c.getEl()),selectByClick:true,selectFromInside:false});
+  const selecto=new Selecto({container:frameBody,dragContainer:frameBody,selectableTargets:[...components()].map(c=>c.getEl()),selectByClick:true,selectFromInside:false,toggleContinueSelect:'shift'});
   function initial(target){const id=target?.getAttribute('data-spike-id');return id&&model.elements.find(e=>e.id===id);}
   function chosen(els){const targets=els.filter(el=>el?.matches?.('[data-spike-id]'));
     moveable.target=targets.length===1?targets[0]:(targets.length?targets:[]);
   }
   selecto.on('select',e=>chosen(e.selected));
   let ongoingId=null;
+  // Moveable's official group events give per-target coordinates. A group is
+  // previewed freely but written atomically once through one canonical revision.
+  function groupStart(kind,e){
+    const targets=(e.targets||[]).filter(el=>initial(el));
+    if(targets.length<2){e.stop?.();return;}
+    const baseline=Object.fromEntries(targets.map(el=>{
+      const item=initial(el);return [item.id,item.geometry];
+    }));
+    if(!gate.begin(kind,'group',baseline)){e.stop?.();return;}
+    ongoingId='group';
+  }
+  function groupPreview(kind,e){
+    if(gate.active?.kind!==kind||ongoingId!=='group')return;
+    const baseline=gate.active.start, next={};
+    for(const ev of e.events||[]){
+      const id=ev.target?.getAttribute('data-spike-id'), g=baseline[id];
+      if(!g)return;
+      const d=kind==='group-drag'?(ev.dist||[0,0]):(ev.drag?.beforeDist||[0,0]);
+      next[id]=kind==='group-drag'
+        ?{...g,x:g.x+d[0],y:g.y+d[1]}
+        :{x:g.x+d[0],y:g.y+d[1],width:ev.width,height:ev.height};
+    }
+    if(Object.keys(next).length!==Object.keys(baseline).length)return;
+    if(!Object.values(next).every(g=>Object.values(g).every(Number.isFinite)&&g.width>=1&&g.height>=1))return;
+    if(!gate.preview(next))return;
+    for(const ev of e.events||[]){
+      const id=ev.target?.getAttribute('data-spike-id'),g=next[id];
+      if(g)Object.assign(ev.target.style,{left:g.x+'px',top:g.y+'px',width:g.width+'px',height:g.height+'px'});
+    }
+  }
+  function groupEnd(kind){
+    if(gate.active?.kind!==kind)return;
+    try{
+      gate.commit((_id,next)=>model.updateMany(Object.entries(next).map(([id,geometry])=>({id,geometry}))));
+      sync();show(kind+': group committed at revision '+model.revision);
+    }catch(error){gate.cancel();sync();show('複数選択の操作保留: '+error.message);}
+    ongoingId=null;
+  }
+  moveable.on('dragGroupStart',e=>groupStart('group-drag',e));
+  moveable.on('dragGroup',e=>groupPreview('group-drag',e));
+  moveable.on('dragGroupEnd',()=>groupEnd('group-drag'));
+  moveable.on('resizeGroupStart',e=>groupStart('group-resize',e));
+  moveable.on('resizeGroup',e=>groupPreview('group-resize',e));
+  moveable.on('resizeGroupEnd',()=>groupEnd('group-resize'));
   function start(kind,e){const found=initial(e.target);if(!found||!gate.begin(kind,found.id,found.geometry)){e.stop?.();return;}
     ongoingId=found.id;
   }
@@ -66,9 +122,10 @@ editor.on('load',()=>{
   moveable.on('resize',e=>preview('resize',e));
   moveable.on('resizeEnd',()=>end('resize'));
   frameDoc.addEventListener('keydown',e=>{if(e.key==='Escape'&&gate.active){gate.cancel();sync();ongoingId=null;show('操作取消');}});
-  // Layer-list reorder is deliberately isolated from iframe free-drag.
+  // Layer-list dnd-kit remains separate from free-drag on the canvas.
+  // A successful drop now changes the same canonical document and component order.
   const list=document.querySelector('#layers');
-  const manager=new DragDropManager();const registers=[];const order=seed.map(e=>e.id);
+  const manager=new DragDropManager();const registers=[];
   for(const element of seed){const li=document.createElement('li');li.dataset.id=element.id;
     const handle=document.createElement('button');handle.type='button';handle.textContent='↕';handle.setAttribute('aria-label',`${element.label} を並べ替え`);
     const label=document.createElement('span');label.textContent=element.label;
@@ -80,12 +137,15 @@ editor.on('load',()=>{
     if(e.operation.canceled||!e.operation.target)return;
     const from=String(e.operation.source?.id||'').replace(/^layer:/,'');
     const to=String(e.operation.target?.id||'').replace(/^target:/,'');
-    if(!order.includes(from)||!order.includes(to)||from===to)return;
-    const at=order.indexOf(from);order.splice(at,1);order.splice(order.indexOf(to),0,from);
-    for(const id of order){const node=[...list.children].find(n=>n.dataset.id===id);if(node)list.append(node);}
-    show('レイヤーUIの順序のみ変更: Canvas/Documentとの同期は未実装（M2）');
+    if(!model.elements.some(x=>x.id===from)||!model.elements.some(x=>x.id===to)||from===to)return;
+    try{
+      if(model.reorder(from,to)){
+        sync();
+        show('dnd-kit: レイヤー・GrapesJS文書順序を同期 / revision '+model.revision);
+      }
+    }catch(error){sync();show('並べ替え保留: '+error.message);}
   });
-  show('M0実験画面: 実機/統合動作は未検証');
+  show('M0実験画面: Chrome証拠以外の実機受入は未検証');
 });
 document.querySelector('#undo').onclick=()=>{if(gate.active){show('ドラッグ確定後にUndo');return;}model.undo();sync();show('Undo');};
 document.querySelector('#redo').onclick=()=>{if(gate.active){show('ドラッグ確定後にRedo');return;}model.redo();sync();show('Redo');};
