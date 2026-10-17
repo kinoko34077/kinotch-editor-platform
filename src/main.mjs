@@ -74,6 +74,7 @@ editor.on('load',()=>{
     }));
     if(!gate.begin(kind,'group',baseline)){e.stop?.();return;}
     ongoingId='group';
+    document.querySelector('#canvas').dataset.lastGroupEvent=kind+':start:'+targets.length;
   }
   function groupPreview(kind,e){
     if(gate.active?.kind!==kind||ongoingId!=='group')return;
@@ -89,6 +90,7 @@ editor.on('load',()=>{
     if(Object.keys(next).length!==Object.keys(baseline).length)return;
     if(!Object.values(next).every(g=>Object.values(g).every(Number.isFinite)&&g.width>=1&&g.height>=1))return;
     if(!gate.preview(next))return;
+    document.querySelector('#canvas').dataset.lastGroupEvent=kind+':preview:'+Object.keys(next).length;
     for(const ev of e.events||[]){
       const id=ev.target?.getAttribute('data-spike-id'),g=next[id];
       if(g)Object.assign(ev.target.style,{left:g.x+'px',top:g.y+'px',width:g.width+'px',height:g.height+'px'});
@@ -101,6 +103,7 @@ editor.on('load',()=>{
       sync();show(kind+': group committed at revision '+model.revision);
     }catch(error){gate.cancel();sync();show('複数選択の操作保留: '+error.message);}
     ongoingId=null;
+    document.querySelector('#canvas').dataset.lastGroupEvent=kind+':end';
   }
   moveable.on('dragGroupStart',e=>groupStart('group-drag',e));
   moveable.on('dragGroup',e=>groupPreview('group-drag',e));
