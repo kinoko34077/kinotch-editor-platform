@@ -55,6 +55,20 @@ try{
   await page.getByRole('button',{name:'JSONを表示'}).click();
   const undone=JSON.parse(await page.locator('#dump').textContent());
   assert.deepEqual(undone.elements.find(e=>e.id==='block-a').geometry,original,'Undo fails after actual pointer drag');
+  const restoredDom=await frame.locator('[data-spike-id="block-a"]').evaluate(el=>({
+    left:parseFloat(getComputedStyle(el).left),top:parseFloat(getComputedStyle(el).top)
+  }));
+  assert(Math.abs(restoredDom.left-original.x)<1&&Math.abs(restoredDom.top-original.y)<1,
+    'DOM geometry diverges from model after Undo: '+JSON.stringify({restoredDom,original}));
+  // Keyboard Ctrl+Z must use the canonical model history, not GrapesJS' UndoManager.
+  await frame.locator('body').press('Control+z');
+  await page.getByRole('button',{name:'JSONを表示'}).click();
+  const keyboardState=JSON.parse(await page.locator('#dump').textContent());
+  assert.deepEqual(keyboardState.elements.find(e=>e.id==='block-a').geometry,original,
+    'Ctrl+Z must not desynchronize model and canvas');
+  await frame.locator('body').press('Delete');
+  assert.equal(await frame.locator('[data-spike-id]').count(),3,'GrapesJS native Delete removed model-owned element');
+
   // Verify direct resize handle, not just keyboard-free model API updates.
   const resizeHandle=frame.locator('.moveable-control[data-direction="se"]');
   assert((await resizeHandle.count())>0,'Southeast Moveable resize handle missing');
@@ -72,6 +86,15 @@ try{
   await page.getByRole('button',{name:'元に戻す'}).click();
   await page.getByRole('button',{name:'JSONを表示'}).click();
   assert.deepEqual(JSON.parse(await page.locator('#dump').textContent()).elements.find(e=>e.id==='block-a').geometry,original,'Undo fails after actual resize');
+  const afterResizeDom=await frame.locator('[data-spike-id="block-a"]').evaluate(el=>({
+    left:parseFloat(getComputedStyle(el).left),top:parseFloat(getComputedStyle(el).top),
+    width:parseFloat(getComputedStyle(el).width),height:parseFloat(getComputedStyle(el).height)
+  }));
+  assert(Math.abs(afterResizeDom.left-original.x)<1&&Math.abs(afterResizeDom.top-original.y)<1,
+    'DOM position does not restore after resize Undo '+JSON.stringify(afterResizeDom));
+  assert(Math.abs(afterResizeDom.width-original.width)<1&&Math.abs(afterResizeDom.height-original.height)<1,
+    'DOM size does not restore after resize Undo '+JSON.stringify({afterResizeDom,original}));
+
   // Real Selecto marquee → Moveable group drag must update both targets
   // in ONE canonical revision and be undone in one action.
   const boxA=await frame.locator('[data-spike-id="block-a"]').boundingBox();

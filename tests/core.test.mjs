@@ -77,3 +77,10 @@ test('reorder is canonical, revision-guarded, undoable and serialized', () => {
   assert.equal(model.reorder('block-c','block-a'),false);
   assert.throws(()=>model.reorder('missing','block-b'),/unknown/);
 });
+
+test('reject huge finite CSS positions without touching committed state',()=>{
+  const m=createLayoutModel(seed);
+  assert.throws(()=>m.update('block-a',{...seed[0].geometry,x:1e300}),/position out of range/);
+  assert.equal(m.revision,0);
+  assert.deepEqual(m.elements[0].geometry,seed[0].geometry);
+});

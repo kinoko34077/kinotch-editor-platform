@@ -2,6 +2,7 @@
 const finite = n => Number.isFinite(n);
 const safeGeom = g => {
   if (!g || !['x', 'y', 'width', 'height'].every(k => finite(g[k]))) throw new TypeError('non-finite geometry');
+  if (Math.abs(g.x) > 100000 || Math.abs(g.y) > 100000) throw new RangeError('position out of range');
   if (g.width < 1 || g.height < 1 || g.width > 20000 || g.height > 20000) throw new RangeError('size out of range');
   return { x: g.x, y: g.y, width: g.width, height: g.height };
 };

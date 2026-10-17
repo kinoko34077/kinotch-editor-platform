@@ -21,8 +21,10 @@ const styleFor=g=>({position:'absolute',left:g.x+'px',top:g.y+'px',width:g.width
 // GrapesJS owns the element tree, and its default editing gestures are disabled on these specimens.
 const editor=grapesjs.init({
   container:'#canvas',height:'100%',width:'100%',storageManager:false,
+  // M0: host model is the only history/keyboard authority, never GrapesJS.
+  undoManager:false,keymaps:{defaults:{}},showToolbar:false,panels:{defaults:[]},
   fromElement:false,blockManager:{},
-  components:seed.map(e=>({tagName:'div',attributes:{'data-spike-id':e.id},name:e.label,draggable:false,resizable:false,stylable:false,style:styleFor(e.geometry),components:e.label}))
+  components:seed.map(e=>({tagName:'div',attributes:{'data-spike-id':e.id},name:e.label,draggable:false,resizable:false,stylable:false,removable:false,copyable:false,selectable:false,hoverable:false,toolbar:[],style:styleFor(e.geometry),components:e.label}))
 });
 const components=()=>editor.getWrapper().find('[data-spike-id]');
 function sync() {
@@ -33,6 +35,10 @@ function sync() {
     const cmp=components().find(c=>c.getAttributes()['data-spike-id']===e.id);
     if(!cmp)throw new Error('missing GrapesJS component: '+e.id);
     cmp.addStyle(styleFor(e.geometry));
+    // Moveable previews touch DOM inline styles; force the canonical geometry
+    // after every commit/Undo/cancel so pixels cannot diverge from the model.
+    const node=cmp.getEl();
+    if(node){const g=e.geometry;Object.assign(node.style,{left:g.x+'px',top:g.y+'px',width:g.width+'px',height:g.height+'px'});}
     if(wrapper.components().indexOf(cmp)!==index)cmp.move(wrapper,{at:index});
   }
   const list=document.querySelector('#layers');
@@ -140,7 +146,27 @@ editor.on('load',()=>{
   moveable.on('resizeStart',e=>start('resize',e));
   moveable.on('resize',e=>preview('resize',e));
   moveable.on('resizeEnd',()=>end('resize'));
-  frameDoc.addEventListener('keydown',e=>{if(e.key==='Escape'&&gate.active){gate.cancel();sync();ongoingId=null;show('操作取消');}});
+  const cancelActive=(cause)=>{
+    if(!gate.active)return;
+    gate.cancel();ongoingId=null;groupTargets=[];
+    sync();show('操作取消: '+cause);
+  };
+  const keyRoute=(e)=>{
+    if(e.key==='Escape'&&gate.active){e.preventDefault();e.stopPropagation();cancelActive('Escape');return;}
+    if((e.ctrlKey||e.metaKey)&&!e.altKey&&e.key.toLowerCase()==='z'){
+      e.preventDefault();e.stopPropagation();
+      if(gate.active){show('操作中はUndoできません');return;}
+      if(e.shiftKey){model.redo();sync();show('Redo');}
+      else {model.undo();sync();show('Undo');}
+    }
+  };
+  frameDoc.addEventListener('keydown',keyRoute,true);
+  document.addEventListener('keydown',keyRoute,true);
+  frameWindow.addEventListener('blur',()=>cancelActive('iframe blur'));
+  frameWindow.addEventListener('pointercancel',()=>cancelActive('pointercancel'),true);
+  frameWindow.addEventListener('touchcancel',()=>cancelActive('touchcancel'),true);
+  frameDoc.addEventListener('visibilitychange',()=>{if(frameDoc.hidden)cancelActive('hidden');});
+
   // Layer-list dnd-kit remains separate from free-drag on the canvas.
   // A successful drop now changes the same canonical document and component order.
   const list=document.querySelector('#layers');
