@@ -87,6 +87,8 @@ try{
   assert.deepEqual(marquee,['block-a','block-b'],'iframe marquee failed: '+JSON.stringify({
     iframeBox,origin,dest,trace:await canvas.getAttribute('data-select-trace'),
     pointerTarget:await canvas.getAttribute('data-frame-mouse-down'),
+    selectable:await canvas.getAttribute('data-selectable-info'),
+    selectEnd:await canvas.getAttribute('data-select-end-info'),
     targetRects:[await frame.locator('[data-spike-id="block-a"]').boundingBox(),await frame.locator('[data-spike-id="block-b"]').boundingBox()]
   }));
   // Real Selecto marquee → Moveable group drag must update both targets
