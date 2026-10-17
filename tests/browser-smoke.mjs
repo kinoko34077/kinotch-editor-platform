@@ -114,7 +114,7 @@ try{
   assert.deepEqual(groupUndone.elements.find(e=>e.id==='block-b').geometry,bBefore,'Group Undo B');
   // Real dnd-kit pointer reorder must update all three representations:
   // sidebar order, canonical JSON and GrapesJS' component collection DOM order.
-  const layerButton=page.locator('#layers li[data-id="block-c"] button');
+  const layerButton=page.locator('#layers li[data-id="block-c"] button:first-child');
   const targetRow=page.locator('#layers li[data-id="block-a"]');
   const fromBox=await layerButton.boundingBox(), toBox=await targetRow.boundingBox();
   assert(fromBox&&toBox,'DnD source or destination not visible');
