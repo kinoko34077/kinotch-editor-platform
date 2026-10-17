@@ -1,0 +1,31 @@
+name: M0 integration spike checks
+
+on:
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'package.json'
+      - 'index.html'
+      - 'docs/M0_SPIKE.md'
+      - '.github/workflows/m0-spike-checks.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  node-and-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install exact-version POC dependencies
+        run: npm install --no-audit --no-fund
+      - name: Contract tests
+        run: npm test
+      - name: Static build (not browser acceptance)
+        run: npm run build
