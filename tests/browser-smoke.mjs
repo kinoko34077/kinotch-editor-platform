@@ -72,6 +72,41 @@ try{
   await page.getByRole('button',{name:'元に戻す'}).click();
   await page.getByRole('button',{name:'JSONを表示'}).click();
   assert.deepEqual(JSON.parse(await page.locator('#dump').textContent()).elements.find(e=>e.id==='block-a').geometry,original,'Undo fails after actual resize');
+  // Real Selecto marquee → Moveable group drag must update both targets
+  // in ONE canonical revision and be undone in one action.
+  const boxA=await frame.locator('[data-spike-id="block-a"]').boundingBox();
+  const boxB=await frame.locator('[data-spike-id="block-b"]').boundingBox();
+  assert(boxA&&boxB,'Group selection specimens missing');
+  const left=Math.min(boxA.x,boxB.x)-12,top=Math.min(boxA.y,boxB.y)-12;
+  const right=Math.max(boxA.x+boxA.width,boxB.x+boxB.width)+6;
+  const bottom=Math.max(boxA.y+boxA.height,boxB.y+boxB.height)+4;
+  await page.mouse.move(left,top);
+  await page.mouse.down();
+  await page.mouse.move(right,bottom,{steps:12});
+  await page.mouse.up();
+  const groupMarker=frame.locator('.moveable-control-box.moveable-group');
+  assert((await groupMarker.count())>0,'Selecto did not produce Moveable group controls for A+B');
+  await page.getByRole('button',{name:'JSONを表示'}).click();
+  const groupBefore=JSON.parse(await page.locator('#dump').textContent());
+  const aBefore=groupBefore.elements.find(e=>e.id==='block-a').geometry;
+  const bBefore=groupBefore.elements.find(e=>e.id==='block-b').geometry;
+  const midX=boxA.x+boxA.width/2,midY=boxA.y+boxA.height/2;
+  await page.mouse.move(midX,midY);
+  await page.mouse.down();
+  await page.mouse.move(midX+25,midY+18,{steps:10});
+  await page.mouse.up();
+  await page.getByRole('button',{name:'JSONを表示'}).click();
+  const groupAfter=JSON.parse(await page.locator('#dump').textContent());
+  const aAfter=groupAfter.elements.find(e=>e.id==='block-a').geometry;
+  const bAfter=groupAfter.elements.find(e=>e.id==='block-b').geometry;
+  assert.equal(groupAfter.revision,groupBefore.revision+1,'Group drag must commit once');
+  assert(aAfter.x!==aBefore.x||aAfter.y!==aBefore.y,'Group drag target A did not move');
+  assert(bAfter.x!==bBefore.x||bAfter.y!==bBefore.y,'Group drag target B did not move');
+  await page.getByRole('button',{name:'元に戻す'}).click();
+  await page.getByRole('button',{name:'JSONを表示'}).click();
+  const groupUndone=JSON.parse(await page.locator('#dump').textContent());
+  assert.deepEqual(groupUndone.elements.find(e=>e.id==='block-a').geometry,aBefore,'Group Undo A');
+  assert.deepEqual(groupUndone.elements.find(e=>e.id==='block-b').geometry,bBefore,'Group Undo B');
   // Real dnd-kit pointer reorder must update all three representations:
   // sidebar order, canonical JSON and GrapesJS' component collection DOM order.
   const layerButton=page.locator('#layers li[data-id="block-c"] button');
