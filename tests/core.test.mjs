@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { GestureGate } from '../src/gesture-gate.mjs';
-import { createLayoutModel } from '../src/layout-model.mjs';
+import { createLayoutModel, parseLayoutSnapshotJSON } from '../src/layout-model.mjs';
 const seed = [{ id:'block-a', label:'A', geometry:{x:12,y:14,width:140,height:70} }];
 test('one gesture owner at a time; commit fires only once', () => {
   const gate=new GestureGate(), writes=[];
@@ -83,4 +83,24 @@ test('reject huge finite CSS positions without touching committed state',()=>{
   assert.throws(()=>m.update('block-a',{...seed[0].geometry,x:1e300}),/position out of range/);
   assert.equal(m.revision,0);
   assert.deepEqual(m.elements[0].geometry,seed[0].geometry);
+});
+
+test('strict model snapshot roundtrip preserves stable IDs, order and geometry',()=>{
+  const m=createLayoutModel([...seed,{id:'block-b',label:'B',geometry:{x:20,y:30,width:12,height:18}}]);
+  m.reorder('block-b','block-a');
+  m.update('block-a',{x:40,y:14,width:140,height:70});
+  const parsed=parseLayoutSnapshotJSON(m.exportJSON());
+  assert.equal(parsed.revision,m.revision);
+  const restored=createLayoutModel(parsed.elements);
+  assert.deepEqual(restored.elements,m.elements);
+});
+test('snapshot rejects unknown schema, injected script, duplicates and invalid geometry without execution',()=>{
+  const m=createLayoutModel(seed);const data=JSON.parse(m.exportJSON());
+  assert.throws(()=>parseLayoutSnapshotJSON('x'),SyntaxError);
+  assert.throws(()=>parseLayoutSnapshotJSON(JSON.stringify({...data,schema:'untrusted.v2'})),/structure/);
+  assert.throws(()=>parseLayoutSnapshotJSON(JSON.stringify({...data,html:'<script>alert(1)<\\/script>'})),/structure/);
+  assert.throws(()=>parseLayoutSnapshotJSON(JSON.stringify({...data,elements:[data.elements[0],data.elements[0]]})),/element/);
+  assert.throws(()=>parseLayoutSnapshotJSON(JSON.stringify({...data,elements:[{...data.elements[0],geometry:{...data.elements[0].geometry,x:1e100}}]})),/position/);
+  assert.throws(()=>parseLayoutSnapshotJSON(JSON.stringify({...data,elements:[{...data.elements[0],label:{html:'<img onerror=x>'}}]})),/element/);
+  assert.deepEqual(m.elements,seed);
 });

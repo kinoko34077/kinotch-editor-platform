@@ -6,6 +6,33 @@ const safeGeom = g => {
   if (g.width < 1 || g.height < 1 || g.width > 20000 || g.height > 20000) throw new RangeError('size out of range');
   return { x: g.x, y: g.y, width: g.width, height: g.height };
 };
+// Pure, read-only snapshot validation. This does NOT enable untrusted HTML imports
+// or mutate a mounted GrapesJS/consumer document.
+export function parseLayoutSnapshotJSON(source) {
+  if (typeof source !== 'string' || source.length > 2_000_000) throw new TypeError('invalid snapshot size');
+  const parsed = JSON.parse(source);
+  const keys = obj => Object.keys(obj).sort().join(',');
+  if (!parsed || Array.isArray(parsed) || typeof parsed !== 'object' ||
+      keys(parsed) !== 'elements,revision,schema' ||
+      parsed.schema !== 'm0-layout-poc.v1' ||
+      !Number.isSafeInteger(parsed.revision) || parsed.revision < 0 ||
+      !Array.isArray(parsed.elements) || parsed.elements.length < 1 || parsed.elements.length > 3000) {
+    throw new TypeError('invalid snapshot structure');
+  }
+  const seen = new Set();
+  const elements = parsed.elements.map(element => {
+    if (!element || typeof element !== 'object' || Array.isArray(element) ||
+        keys(element) !== 'geometry,id,label' ||
+        typeof element.id !== 'string' || !/^[a-z][a-z0-9-]{0,60}$/.test(element.id) ||
+        seen.has(element.id) || typeof element.label !== 'string' || element.label.length > 256 ||
+        !element.geometry || typeof element.geometry !== 'object' ||
+        keys(element.geometry) !== 'height,width,x,y') throw new TypeError('invalid snapshot element');
+    seen.add(element.id);
+    return {id:element.id,label:element.label,geometry:safeGeom(element.geometry)};
+  });
+  return {schema:parsed.schema,revision:parsed.revision,elements};
+}
+
 export function createLayoutModel(initial) {
   if (!Array.isArray(initial) || !initial.length) throw new TypeError('no elements');
   const unique = new Set();
