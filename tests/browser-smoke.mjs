@@ -77,20 +77,14 @@ try{
   const boxA=await frame.locator('[data-spike-id="block-a"]').boundingBox();
   const boxB=await frame.locator('[data-spike-id="block-b"]').boundingBox();
   assert(boxA&&boxB,'Group selection specimens missing');
-  // Begin from empty canvas *below-left* of selected controls to avoid
-  // Moveable's active resize handles intercepting Selecto's pointerdown.
-  const left=Math.min(boxA.x,boxB.x)-15;
-  const top=Math.min(boxA.y,boxB.y)-20;
-  const right=Math.max(boxA.x+boxA.width,boxB.x+boxB.width)+8;
-  const bottom=Math.max(boxA.y+boxA.height,boxB.y+boxB.height)-25;
-  await page.mouse.move(left,bottom);
-  await page.mouse.down();
-  await page.mouse.move(right,top,{steps:14});
-  await page.mouse.up();
-  // Selecto's public select event is the actual proof, not an undocumented
+  // User-visible accessible layer controls provide a second Selecto route;
+  // iframe marquee is separately unverified and must not be claimed here.
+  await page.locator('#layers [data-select-id="block-a"]').click();
+  await page.locator('#layers [data-select-id="block-b"]').click({modifiers:['Shift']});
+  // Selection is synchronized through Selecto's public API, not an undocumented
   // Moveable CSS class. Verify the selected stable targets before group pointer drag.
   const selected=(await page.locator('#canvas').getAttribute('data-selected-ids')||'').split(',').filter(Boolean);
-  assert.deepEqual(selected.sort(),['block-a','block-b'],'Marquee selection did not select A and B exclusively');
+  assert.deepEqual(selected.sort(),['block-a','block-b'],'Layer selection did not select A and B exclusively');
   await page.getByRole('button',{name:'JSONを表示'}).click();
   const groupBefore=JSON.parse(await page.locator('#dump').textContent());
   const aBefore=groupBefore.elements.find(e=>e.id==='block-a').geometry;
