@@ -4,7 +4,7 @@ export class GestureGate {
   #last = null;
   begin(kind, id, start) {
     if (this.#active) return false;
-    if (!['resize', 'free-drag', 'reorder', 'select'].includes(kind)) throw new TypeError('unsupported gesture');
+    if (!['resize', 'free-drag', 'group-resize', 'group-drag', 'reorder', 'select'].includes(kind)) throw new TypeError('unsupported gesture');
     if (!id || !start || typeof start !== 'object') throw new TypeError('invalid target');
     this.#active = { kind, id, start: structuredClone(start), preview: structuredClone(start) };
     return true;
