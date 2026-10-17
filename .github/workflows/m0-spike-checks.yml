@@ -29,3 +29,5 @@ jobs:
         run: npm test
       - name: Static build (not browser acceptance)
         run: npm run build
+      - name: Browser boot smoke in existing runner Chrome
+        run: npm run test:browser
