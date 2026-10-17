@@ -29,6 +29,40 @@ export function createLayoutModel(initial) {
     revision++;
     return true;
   }
+  // Atomic multi-target transform: validate *all* inputs before one snapshot/write.
+  function updateMany(entries, expectedRevision = revision) {
+    if (expectedRevision !== revision) throw new Error('stale state revision');
+    if (!Array.isArray(entries) || !entries.length) throw new TypeError('no updates');
+    const nextById = new Map();
+    for (const item of entries) {
+      if (!item || typeof item.id !== 'string' || nextById.has(item.id)) throw new TypeError('invalid or duplicate update target');
+      if (!current.some(e => e.id === item.id)) throw new TypeError('unknown element');
+      nextById.set(item.id, safeGeom(item.geometry));
+    }
+    if (![...nextById].some(([id, g]) => JSON.stringify(current.find(e => e.id === id).geometry) !== JSON.stringify(g))) return false;
+    undo.push(clone(current));
+    if (undo.length > 50) undo.shift();
+    redo.length = 0;
+    current = current.map(e => nextById.has(e.id) ? {...e, geometry: nextById.get(e.id)} : e);
+    revision++;
+    return true;
+  }
+  // Order is canonical and undoable; position geometry remains independent for free-layout specimens.
+  function reorder(sourceId, beforeId, expectedRevision = revision) {
+    if (expectedRevision !== revision) throw new Error('stale state revision');
+    if (sourceId === beforeId) return false;
+    const from = current.find(e => e.id === sourceId), to = current.find(e => e.id === beforeId);
+    if (!from || !to) throw new TypeError('unknown element');
+    const next = current.filter(e => e.id !== sourceId);
+    next.splice(next.findIndex(e => e.id === beforeId), 0, from);
+    if (next.every((e, i) => e.id === current[i].id)) return false;
+    undo.push(clone(current));
+    if (undo.length > 50) undo.shift();
+    redo.length = 0;
+    current = next;
+    revision++;
+    return true;
+  }
   function step(from, to) {
     if (!from.length) return false;
     to.push(clone(current));
@@ -39,7 +73,7 @@ export function createLayoutModel(initial) {
   return {
     get revision() { return revision; },
     get elements() { return clone(current); },
-    update, undo: () => step(undo, redo), redo: () => step(redo, undo),
+    update, updateMany, reorder, undo: () => step(undo, redo), redo: () => step(redo, undo),
     exportJSON() { return JSON.stringify({ schema: 'm0-layout-poc.v1', revision, elements: clone(current) }); },
     staticImport() { throw new Error('Import intentionally disabled until document validation and migration contract are defined'); }
   };
