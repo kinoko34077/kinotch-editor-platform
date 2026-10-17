@@ -1,0 +1,19 @@
+{
+  "name": "kinotch-editor-platform-m0",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "vite build",
+    "test": "node --test tests/*.test.mjs",
+    "check": "npm run test && npm run build"
+  },
+  "dependencies": {
+    "grapesjs": "0.23.6",
+    "moveable": "0.53.0",
+    "selecto": "1.26.3",
+    "@dnd-kit/dom": "0.5.0"
+  },
+  "devDependencies": { "vite": "8.3.4" }
+}
