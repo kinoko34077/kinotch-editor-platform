@@ -50,7 +50,10 @@ editor.on('load',()=>{
   const frameBody=editor.Canvas.getBody();
   const frameDoc=frameBody.ownerDocument;
   const moveable=new Moveable(frameBody,{target:locate('block-a'),container:frameBody,draggable:true,resizable:true,origin:false,snappable:true});
-  const selecto=new Selecto({container:frameBody,dragContainer:frameBody,selectableTargets:[...components()].map(c=>c.getEl()),selectByClick:true,selectFromInside:false,toggleContinueSelect:'shift'});
+  // Follow upstream Selecto iframe fixture: drag/key listener belongs to the iframe window,
+  // not the body. This avoids lost marquee gestures across GrapesJS' iframe boundary.
+  const frameWindow=frameDoc.defaultView;
+  const selecto=new Selecto({container:frameBody,dragContainer:frameWindow,keyContainer:frameWindow,hitRate:0,selectableTargets:[...components()].map(c=>c.getEl()),selectByClick:true,selectFromInside:false,toggleContinueSelect:'shift'});
   function initial(target){const id=target?.getAttribute('data-spike-id');return id&&model.elements.find(e=>e.id===id);}
   function chosen(els){const targets=els.filter(el=>el?.matches?.('[data-spike-id]'));
     moveable.target=targets.length===1?targets[0]:(targets.length?targets:[]);
