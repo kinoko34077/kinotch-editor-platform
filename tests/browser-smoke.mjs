@@ -85,7 +85,9 @@ try{
   await page.mouse.move(right,bottom,{steps:12});
   await page.mouse.up();
   const groupMarker=frame.locator('.moveable-control-box.moveable-group');
-  assert((await groupMarker.count())>0,'Selecto did not produce Moveable group controls for A+B');
+  const controlClasses=await frame.locator('.moveable-control-box').evaluateAll(els=>els.map(el=>({classes:el.className,descendants:el.querySelectorAll('.moveable-control').length})));
+  const selectionClasses=await frame.locator('[data-spike-id]').evaluateAll(els=>els.map(el=>({id:el.dataset.spikeId,classes:el.className})));
+  assert((await groupMarker.count())>0,'Selecto did not produce Moveable group controls for A+B: '+JSON.stringify({controlClasses,selectionClasses,from:{left,top,right,bottom}}));
   await page.getByRole('button',{name:'JSONを表示'}).click();
   const groupBefore=JSON.parse(await page.locator('#dump').textContent());
   const aBefore=groupBefore.elements.find(e=>e.id==='block-a').geometry;
