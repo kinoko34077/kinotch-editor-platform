@@ -55,6 +55,23 @@ try{
   await page.getByRole('button',{name:'JSONを表示'}).click();
   const undone=JSON.parse(await page.locator('#dump').textContent());
   assert.deepEqual(undone.elements.find(e=>e.id==='block-a').geometry,original,'Undo fails after actual pointer drag');
+  // Verify direct resize handle, not just keyboard-free model API updates.
+  const resizeHandle=frame.locator('.moveable-control[data-direction="se"]');
+  assert((await resizeHandle.count())>0,'Southeast Moveable resize handle missing');
+  const handleBox=await resizeHandle.first().boundingBox();
+  assert(handleBox,'Cannot locate resize handle');
+  const hx=handleBox.x+handleBox.width/2, hy=handleBox.y+handleBox.height/2;
+  await page.mouse.move(hx,hy);
+  await page.mouse.down();
+  await page.mouse.move(hx+42,hy+19,{steps:10});
+  await page.mouse.up();
+  await page.getByRole('button',{name:'JSONを表示'}).click();
+  const resized=JSON.parse(await page.locator('#dump').textContent());
+  const newSize=resized.elements.find(e=>e.id==='block-a').geometry;
+  assert(newSize.width!==original.width||newSize.height!==original.height,'Actual pointer resize did not persist geometry: '+JSON.stringify(newSize));
+  await page.getByRole('button',{name:'元に戻す'}).click();
+  await page.getByRole('button',{name:'JSONを表示'}).click();
+  assert.deepEqual(JSON.parse(await page.locator('#dump').textContent()).elements.find(e=>e.id==='block-a').geometry,original,'Undo fails after actual resize');
   assert.deepEqual(errors,[],'Browser uncaught exceptions: '+errors.join('; '));
   console.log(JSON.stringify({status:'BROWSER_BOOT_SMOKE_PASS',specimens,moveableControls:controls},null,2));
 }finally{
