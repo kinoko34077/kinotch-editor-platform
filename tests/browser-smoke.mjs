@@ -197,7 +197,27 @@ try{
     assert(updated.width!==initial.width||updated.height!==initial.height,
       'Group resize did not change size for '+id+': '+JSON.stringify({initial,updated}));
   }
-  await page.getByRole('button',{name:'元に戻す'}).click();
+  // A group resize must preserve the group's affine relationships, not merely
+  // change each item's size. This catches wrong beforeDist or inconsistent scaling.
+  const originalA=beforeResize.elements.find(e=>e.id==='block-a').geometry;
+  const originalB=beforeResize.elements.find(e=>e.id==='block-b').geometry;
+  const scaledA=afterResize.elements.find(e=>e.id==='block-a').geometry;
+  const scaledB=afterResize.elements.find(e=>e.id==='block-b').geometry;
+  const scaleAX=scaledA.width/originalA.width,scaleBX=scaledB.width/originalB.width;
+  const scaleAY=scaledA.height/originalA.height,scaleBY=scaledB.height/originalB.height;
+  assert(Math.abs(scaleAX-scaleBX)<0.05&&Math.abs(scaleAY-scaleBY)<0.05,
+    'Group scale not consistent between unequal-size elements '+JSON.stringify({scaleAX,scaleBX,scaleAY,scaleBY,originalA,originalB,scaledA,scaledB}));
+  assert(Math.abs((scaledB.x-scaledA.x)-(originalB.x-originalA.x)*scaleAX)<2,
+    'Group x-offset fails affine resize '+JSON.stringify({originalA,originalB,scaledA,scaledB}));
+  assert(Math.abs((scaledB.y-scaledA.y)-(originalB.y-originalA.y)*scaleAY)<2,
+    'Group y-offset fails affine resize '+JSON.stringify({originalA,originalB,scaledA,scaledB}));
+  for(const id of ['block-a','block-b']){
+    const modelGeom=afterResize.elements.find(e=>e.id===id).geometry;
+    const dom=await frame.locator('[data-spike-id="'+id+'"]').evaluate(el=>({x:parseFloat(getComputedStyle(el).left),y:parseFloat(getComputedStyle(el).top),width:parseFloat(getComputedStyle(el).width),height:parseFloat(getComputedStyle(el).height)}));
+    for(const key of ['x','y','width','height'])assert(Math.abs(dom[key]-modelGeom[key])<1,
+      'Group resize CSS/model divergence '+id+': '+key+' '+JSON.stringify({dom,modelGeom}));
+  }
+    await page.getByRole('button',{name:'元に戻す'}).click();
   await page.getByRole('button',{name:'JSONを表示'}).click();
   const restoredResize=JSON.parse(await page.locator('#dump').textContent());
   for(const id of ['block-a','block-b']){
