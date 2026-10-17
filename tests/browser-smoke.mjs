@@ -77,12 +77,15 @@ try{
   const boxA=await frame.locator('[data-spike-id="block-a"]').boundingBox();
   const boxB=await frame.locator('[data-spike-id="block-b"]').boundingBox();
   assert(boxA&&boxB,'Group selection specimens missing');
-  const left=Math.min(boxA.x,boxB.x)-12,top=Math.min(boxA.y,boxB.y)-12;
-  const right=Math.max(boxA.x+boxA.width,boxB.x+boxB.width)+6;
-  const bottom=Math.max(boxA.y+boxA.height,boxB.y+boxB.height)+4;
-  await page.mouse.move(left,top);
+  // Begin from empty canvas *below-left* of selected controls to avoid
+  // Moveable's active resize handles intercepting Selecto's pointerdown.
+  const left=Math.min(boxA.x,boxB.x)-15;
+  const top=Math.min(boxA.y,boxB.y)-20;
+  const right=Math.max(boxA.x+boxA.width,boxB.x+boxB.width)+8;
+  const bottom=Math.max(boxA.y+boxA.height,boxB.y+boxB.height)-25;
+  await page.mouse.move(left,bottom);
   await page.mouse.down();
-  await page.mouse.move(right,bottom,{steps:12});
+  await page.mouse.move(right,top,{steps:14});
   await page.mouse.up();
   // Selecto's public select event is the actual proof, not an undocumented
   // Moveable CSS class. Verify the selected stable targets before group pointer drag.
