@@ -36,6 +36,25 @@ try{
   const json=JSON.parse(await page.locator('#dump').textContent());
   assert.equal(json.elements.length,3);
   assert.equal(json.schema,'m0-layout-poc.v1');
+  // An actual pointer interaction is needed; frame boot alone does not prove editing.
+  const original=json.elements.find(e=>e.id==='block-a').geometry;
+  const rect=await frame.locator('[data-spike-id="block-a"]').boundingBox();
+  assert(rect && rect.width>10 && rect.height>10,'Cannot locate draggable specimen');
+  const startX=rect.x+rect.width/2;
+  const startY=rect.y+rect.height/2;
+  await page.mouse.move(startX,startY);
+  await page.mouse.down();
+  await page.mouse.move(startX+38,startY+23,{steps:9});
+  await page.mouse.up();
+  await page.getByRole('button',{name:'JSONを表示'}).click();
+  const dragged=JSON.parse(await page.locator('#dump').textContent());
+  const next=dragged.elements.find(e=>e.id==='block-a').geometry;
+  assert(dragged.revision>json.revision,'Pointer drag did not commit to canonical model. Original='+JSON.stringify(original)+' Current='+JSON.stringify(next)+' Status='+await page.locator('#status').textContent());
+  assert(next.x!==original.x||next.y!==original.y,'Pointer drag changed revision but not position');
+  await page.getByRole('button',{name:'元に戻す'}).click();
+  await page.getByRole('button',{name:'JSONを表示'}).click();
+  const undone=JSON.parse(await page.locator('#dump').textContent());
+  assert.deepEqual(undone.elements.find(e=>e.id==='block-a').geometry,original,'Undo fails after actual pointer drag');
   assert.deepEqual(errors,[],'Browser uncaught exceptions: '+errors.join('; '));
   console.log(JSON.stringify({status:'BROWSER_BOOT_SMOKE_PASS',specimens,moveableControls:controls},null,2));
 }finally{
