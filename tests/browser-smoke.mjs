@@ -119,8 +119,14 @@ try{
   assert.deepEqual((await page.locator('#canvas').getAttribute('data-selected-ids')||'').split(',').sort(),
     ['block-a','block-b'],'Group resize requires both targets selected');
   const groupHandle=frame.locator('.moveable-control[data-direction="se"]').last();
+  await page.waitForTimeout(200); // Allow Moveable target-array re-render, not a fixed test assertion.
   const groupHandleBox=await groupHandle.boundingBox();
-  assert(groupHandleBox,'Moveable group resize southeast handle missing');
+  assert(groupHandleBox,'Moveable group resize southeast handle missing: '+JSON.stringify(
+    await frame.locator('.moveable-control-box').evaluateAll(boxes=>boxes.map(box=>({
+      css:box.className,controls:[...box.querySelectorAll('.moveable-control')].map(c=>({
+        direction:c.getAttribute('data-direction'),className:c.className,visible:c.getBoundingClientRect().width
+      }))
+    })))));
   await page.getByRole('button',{name:'JSONを表示'}).click();
   const beforeResize=JSON.parse(await page.locator('#dump').textContent());
   const gx=groupHandleBox.x+groupHandleBox.width/2, gy=groupHandleBox.y+groupHandleBox.height/2;
