@@ -72,6 +72,28 @@ try{
   await page.getByRole('button',{name:'元に戻す'}).click();
   await page.getByRole('button',{name:'JSONを表示'}).click();
   assert.deepEqual(JSON.parse(await page.locator('#dump').textContent()).elements.find(e=>e.id==='block-a').geometry,original,'Undo fails after actual resize');
+  // Real dnd-kit pointer reorder must update all three representations:
+  // sidebar order, canonical JSON and GrapesJS' component collection DOM order.
+  const layerButton=page.locator('#layers li[data-id="block-c"] button');
+  const targetRow=page.locator('#layers li[data-id="block-a"]');
+  const fromBox=await layerButton.boundingBox(), toBox=await targetRow.boundingBox();
+  assert(fromBox&&toBox,'DnD source or destination not visible');
+  await page.mouse.move(fromBox.x+fromBox.width/2,fromBox.y+fromBox.height/2);
+  await page.mouse.down();
+  await page.mouse.move(toBox.x+toBox.width/2,toBox.y+toBox.height/2,{steps:15});
+  await page.mouse.up();
+  await page.getByRole('button',{name:'JSONを表示'}).click();
+  const reordered=JSON.parse(await page.locator('#dump').textContent());
+  const expectedIds=['block-c','block-a','block-b'];
+  assert.deepEqual(reordered.elements.map(e=>e.id),expectedIds,
+    'dnd-kit reorder did not commit to canonical model; '+await page.locator('#status').textContent());
+  assert.deepEqual(await page.locator('#layers li').evaluateAll(els=>els.map(e=>e.dataset.id)),expectedIds,'sidebar differs from canonical order');
+  assert.deepEqual(await frame.locator('[data-spike-id]').evaluateAll(els=>els.map(e=>e.dataset.spikeId)),expectedIds,'GrapesJS document differs from canonical order');
+  await page.getByRole('button',{name:'元に戻す'}).click();
+  await page.getByRole('button',{name:'JSONを表示'}).click();
+  const resetOrder=['block-a','block-b','block-c'];
+  assert.deepEqual(JSON.parse(await page.locator('#dump').textContent()).elements.map(e=>e.id),resetOrder,'reorder undo fails');
+  assert.deepEqual(await frame.locator('[data-spike-id]').evaluateAll(els=>els.map(e=>e.dataset.spikeId)),resetOrder,'document reorder undo fails');
   assert.deepEqual(errors,[],'Browser uncaught exceptions: '+errors.join('; '));
   console.log(JSON.stringify({status:'BROWSER_BOOT_SMOKE_PASS',specimens,moveableControls:controls},null,2));
 }finally{
