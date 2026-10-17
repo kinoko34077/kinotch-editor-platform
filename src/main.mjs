@@ -53,12 +53,7 @@ editor.on('load',()=>{
   // Follow upstream Selecto iframe fixture: drag/key listener belongs to the iframe window,
   // not the body. This avoids lost marquee gestures across GrapesJS' iframe boundary.
   const frameWindow=frameDoc.defaultView;
-  const selectable=[...components()].map(c=>c.getEl());
-  document.querySelector('#canvas').dataset.selectableInfo=JSON.stringify(selectable.map(x=>({
-    id:x?.getAttribute?.('data-spike-id')||null,connected:!!x?.isConnected,
-    sameDocument:x?.ownerDocument===frameDoc,rect:x?.getBoundingClientRect?.().toJSON?.()||null
-  })));
-  const selecto=new Selecto({container:frameBody,dragContainer:frameWindow,keyContainer:frameWindow,hitRate:0,selectableTargets:selectable,selectByClick:true,selectFromInside:false,toggleContinueSelect:'shift'});
+  const selecto=new Selecto({container:frameBody,dragContainer:frameWindow,keyContainer:frameWindow,hitRate:0,selectableTargets:[...components()].map(c=>c.getEl()),selectByClick:true,selectFromInside:false,toggleContinueSelect:'shift'});
   function initial(target){const id=target?.getAttribute('data-spike-id');return id&&model.elements.find(e=>e.id===id);}
   function chosen(els){const targets=els.filter(el=>el?.matches?.('[data-spike-id]'));
     moveable.target=targets.length===1?targets[0]:(targets.length?targets:[]);
@@ -67,44 +62,7 @@ editor.on('load',()=>{
       btn.setAttribute('aria-pressed',String(targets.some(el=>el.dataset.spikeId===btn.dataset.selectId)));
     }
   }
-  // M0 diagnostic only: correlate native iframe pointer targets to Selecto
-  // callbacks to distinguish hit testing from gesture-event interception.
-  const observed=[];
-  const trace=(kind,e)=>{
-    const target=e?.inputEvent?.target;
-    observed.push({kind,tag:target?.tagName||'',className:typeof target?.className==='string'?target.className.slice(0,100):'',ids:(e?.selected||[]).map(x=>x.dataset?.spikeId).filter(Boolean)});
-    if(observed.length>20)observed.shift();
-    document.querySelector('#canvas').dataset.selectTrace=JSON.stringify(observed);
-  };
-  for(const event of ['dragStart','selectStart','select','selectEnd'])selecto.on(event,e=>{
-    trace(event,e);
-    if(event==='selectEnd'){
-      document.querySelector('#canvas').dataset.selectEndInfo=JSON.stringify({
-        selected:(e.selected||[]).map(x=>x.dataset?.spikeId),
-        afterAdded:(e.afterAdded||[]).map(x=>x.dataset?.spikeId),
-        rect:e.rect||null
-      });
-    }
-  });
-  for(const [surface, host] of [['window',frameWindow],['body',frameBody]]){
-    for(const capture of [true,false]){
-      let moves=0;
-      host.addEventListener('mousemove',e=>{
-        moves++;
-        document.querySelector('#canvas').dataset['move'+surface+(capture?'Capture':'Bubble')]=JSON.stringify({moves,x:e.clientX,y:e.clientY});
-      },{capture,passive:true});
-    }
-  }
-  selecto.on('drag',e=>{
-    const el=document.querySelector('#canvas');
-    const v=Number(el.dataset.selectoMoveCount||0)+1;
-    el.dataset.selectoMoveCount=String(v);
-    el.dataset.selectoLastRect=JSON.stringify(e.rect||null);
-  });
-    frameDoc.addEventListener('mousedown',e=>{
-    document.querySelector('#canvas').dataset.frameMouseDown=String(e.target?.tagName||'')+':'+String(e.target?.className||'').slice(0,90);
-  },true);
-    // Do not let Selecto retarget Moveable midway through an active transform.
+  // Do not let Selecto retarget Moveable midway through an active transform.
   selecto.on('select',e=>{if(!gate.active)chosen(e.selected);});
   let ongoingId=null;
   let groupTargets=[];

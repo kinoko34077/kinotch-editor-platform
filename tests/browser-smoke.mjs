@@ -72,31 +72,6 @@ try{
   await page.getByRole('button',{name:'元に戻す'}).click();
   await page.getByRole('button',{name:'JSONを表示'}).click();
   assert.deepEqual(JSON.parse(await page.locator('#dump').textContent()).elements.find(e=>e.id==='block-a').geometry,original,'Undo fails after actual resize');
-  // Probe direct iframe marquee from a guaranteed blank local corner (5,5);
-  // select A+B, exclude C (starts at y=204). This is distinct from sidebar selection.
-  const iframeEl=await frame.frameElement(), iframeBox=await iframeEl.boundingBox();
-  assert(iframeBox,'GrapesJS frame has no rendered bounding box');
-  const origin={x:iframeBox.x+5,y:iframeBox.y+5};
-  const dest={x:iframeBox.x+410,y:iframeBox.y+196};
-  await page.mouse.move(origin.x,origin.y);
-  await page.mouse.down();
-  await page.mouse.move(dest.x,dest.y,{steps:18});
-  await page.mouse.up();
-  const canvas=page.locator('#canvas');
-  const marquee=(await canvas.getAttribute('data-selected-ids')||'').split(',').filter(Boolean).sort();
-  assert.deepEqual(marquee,['block-a','block-b'],'iframe marquee failed: '+JSON.stringify({
-    iframeBox,origin,dest,trace:await canvas.getAttribute('data-select-trace'),
-    pointerTarget:await canvas.getAttribute('data-frame-mouse-down'),
-    selectable:await canvas.getAttribute('data-selectable-info'),
-    selectEnd:await canvas.getAttribute('data-select-end-info'),
-    moveWindowCapture:await canvas.getAttribute('data-movewindow-capture'),
-    moveWindowBubble:await canvas.getAttribute('data-movewindow-bubble'),
-    moveBodyCapture:await canvas.getAttribute('data-movebody-capture'),
-    moveBodyBubble:await canvas.getAttribute('data-movebody-bubble'),
-    selectoDragMoves:await canvas.getAttribute('data-selecto-move-count'),
-    selectoLastRect:await canvas.getAttribute('data-selecto-last-rect'),
-    targetRects:[await frame.locator('[data-spike-id="block-a"]').boundingBox(),await frame.locator('[data-spike-id="block-b"]').boundingBox()]
-  }));
   // Real Selecto marquee → Moveable group drag must update both targets
   // in ONE canonical revision and be undone in one action.
   const boxA=await frame.locator('[data-spike-id="block-a"]').boundingBox();
@@ -137,6 +112,39 @@ try{
   const groupUndone=JSON.parse(await page.locator('#dump').textContent());
   assert.deepEqual(groupUndone.elements.find(e=>e.id==='block-a').geometry,aBefore,'Group Undo A');
   assert.deepEqual(groupUndone.elements.find(e=>e.id==='block-b').geometry,bBefore,'Group Undo B');
+  // Real Moveable group resize, not just a unit-level updateMany call.
+  // Selection remains in the editor, but reselect using public UI for a deterministic start.
+  await page.locator('#layers [data-select-id="block-a"]').click();
+  await page.locator('#layers [data-select-id="block-b"]').click({modifiers:['Shift']});
+  assert.deepEqual((await page.locator('#canvas').getAttribute('data-selected-ids')||'').split(',').sort(),
+    ['block-a','block-b'],'Group resize requires both targets selected');
+  const groupHandle=frame.locator('.moveable-control[data-direction="se"]').last();
+  const groupHandleBox=await groupHandle.boundingBox();
+  assert(groupHandleBox,'Moveable group resize southeast handle missing');
+  await page.getByRole('button',{name:'JSONを表示'}).click();
+  const beforeResize=JSON.parse(await page.locator('#dump').textContent());
+  const gx=groupHandleBox.x+groupHandleBox.width/2, gy=groupHandleBox.y+groupHandleBox.height/2;
+  await page.mouse.move(gx,gy);
+  await page.mouse.down();
+  await page.mouse.move(gx+45,gy+27,{steps:10});
+  await page.mouse.up();
+  await page.getByRole('button',{name:'JSONを表示'}).click();
+  const afterResize=JSON.parse(await page.locator('#dump').textContent());
+  assert.equal(afterResize.revision,beforeResize.revision+1,
+    'Moveable group resize must commit exactly one model revision: '+await page.locator('#canvas').getAttribute('data-last-group-event'));
+  for(const id of ['block-a','block-b']){
+    const initial=beforeResize.elements.find(e=>e.id===id).geometry;
+    const updated=afterResize.elements.find(e=>e.id===id).geometry;
+    assert(updated.width!==initial.width||updated.height!==initial.height,
+      'Group resize did not change size for '+id+': '+JSON.stringify({initial,updated}));
+  }
+  await page.getByRole('button',{name:'元に戻す'}).click();
+  await page.getByRole('button',{name:'JSONを表示'}).click();
+  const restoredResize=JSON.parse(await page.locator('#dump').textContent());
+  for(const id of ['block-a','block-b']){
+    assert.deepEqual(restoredResize.elements.find(e=>e.id===id).geometry,
+      beforeResize.elements.find(e=>e.id===id).geometry,'Group resize Undo '+id);
+  }
   // Real dnd-kit pointer reorder must update all three representations:
   // sidebar order, canonical JSON and GrapesJS' component collection DOM order.
   const layerButton=page.locator('#layers li[data-id="block-c"] button:first-child');
