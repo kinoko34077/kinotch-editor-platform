@@ -89,6 +89,12 @@ try{
     pointerTarget:await canvas.getAttribute('data-frame-mouse-down'),
     selectable:await canvas.getAttribute('data-selectable-info'),
     selectEnd:await canvas.getAttribute('data-select-end-info'),
+    moveWindowCapture:await canvas.getAttribute('data-movewindow-capture'),
+    moveWindowBubble:await canvas.getAttribute('data-movewindow-bubble'),
+    moveBodyCapture:await canvas.getAttribute('data-movebody-capture'),
+    moveBodyBubble:await canvas.getAttribute('data-movebody-bubble'),
+    selectoDragMoves:await canvas.getAttribute('data-selecto-move-count'),
+    selectoLastRect:await canvas.getAttribute('data-selecto-last-rect'),
     targetRects:[await frame.locator('[data-spike-id="block-a"]').boundingBox(),await frame.locator('[data-spike-id="block-b"]').boundingBox()]
   }));
   // Real Selecto marquee → Moveable group drag must update both targets

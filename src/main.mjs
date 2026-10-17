@@ -86,7 +86,22 @@ editor.on('load',()=>{
       });
     }
   });
-  frameDoc.addEventListener('mousedown',e=>{
+  for(const [surface, host] of [['window',frameWindow],['body',frameBody]]){
+    for(const capture of [true,false]){
+      let moves=0;
+      host.addEventListener('mousemove',e=>{
+        moves++;
+        document.querySelector('#canvas').dataset['move'+surface+(capture?'Capture':'Bubble')]=JSON.stringify({moves,x:e.clientX,y:e.clientY});
+      },{capture,passive:true});
+    }
+  }
+  selecto.on('drag',e=>{
+    const el=document.querySelector('#canvas');
+    const v=Number(el.dataset.selectoMoveCount||0)+1;
+    el.dataset.selectoMoveCount=String(v);
+    el.dataset.selectoLastRect=JSON.stringify(e.rect||null);
+  });
+    frameDoc.addEventListener('mousedown',e=>{
     document.querySelector('#canvas').dataset.frameMouseDown=String(e.target?.tagName||'')+':'+String(e.target?.className||'').slice(0,90);
   },true);
     // Do not let Selecto retarget Moveable midway through an active transform.
