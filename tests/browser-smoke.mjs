@@ -41,4 +41,9 @@ try{
 }finally{
   if(browser)await browser.close();
   server.kill('SIGTERM');
+  server.stdout?.destroy();
+  server.stderr?.destroy();
 }
+// The Vite npm wrapper can leave descendant stdout pipes open after successful assertions.
+// This isolated CI smoke process must terminate deterministically after all checks pass.
+process.exit(0);
