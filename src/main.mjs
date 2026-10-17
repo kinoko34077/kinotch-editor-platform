@@ -62,7 +62,20 @@ editor.on('load',()=>{
       btn.setAttribute('aria-pressed',String(targets.some(el=>el.dataset.spikeId===btn.dataset.selectId)));
     }
   }
-  // Do not let Selecto retarget Moveable midway through an active transform.
+  // M0 diagnostic only: correlate native iframe pointer targets to Selecto
+  // callbacks to distinguish hit testing from gesture-event interception.
+  const observed=[];
+  const trace=(kind,e)=>{
+    const target=e?.inputEvent?.target;
+    observed.push({kind,tag:target?.tagName||'',className:typeof target?.className==='string'?target.className.slice(0,100):'',ids:(e?.selected||[]).map(x=>x.dataset?.spikeId).filter(Boolean)});
+    if(observed.length>20)observed.shift();
+    document.querySelector('#canvas').dataset.selectTrace=JSON.stringify(observed);
+  };
+  for(const event of ['dragStart','selectStart','selectEnd'])selecto.on(event,e=>trace(event,e));
+  frameDoc.addEventListener('mousedown',e=>{
+    document.querySelector('#canvas').dataset.frameMouseDown=String(e.target?.tagName||'')+':'+String(e.target?.className||'').slice(0,90);
+  },true);
+    // Do not let Selecto retarget Moveable midway through an active transform.
   selecto.on('select',e=>{if(!gate.active)chosen(e.selected);});
   let ongoingId=null;
   let groupTargets=[];

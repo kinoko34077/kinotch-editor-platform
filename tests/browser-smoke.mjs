@@ -72,6 +72,23 @@ try{
   await page.getByRole('button',{name:'元に戻す'}).click();
   await page.getByRole('button',{name:'JSONを表示'}).click();
   assert.deepEqual(JSON.parse(await page.locator('#dump').textContent()).elements.find(e=>e.id==='block-a').geometry,original,'Undo fails after actual resize');
+  // Probe direct iframe marquee from a guaranteed blank local corner (5,5);
+  // select A+B, exclude C (starts at y=204). This is distinct from sidebar selection.
+  const iframeEl=await frame.frameElement(), iframeBox=await iframeEl.boundingBox();
+  assert(iframeBox,'GrapesJS frame has no rendered bounding box');
+  const origin={x:iframeBox.x+5,y:iframeBox.y+5};
+  const dest={x:iframeBox.x+410,y:iframeBox.y+196};
+  await page.mouse.move(origin.x,origin.y);
+  await page.mouse.down();
+  await page.mouse.move(dest.x,dest.y,{steps:18});
+  await page.mouse.up();
+  const canvas=page.locator('#canvas');
+  const marquee=(await canvas.getAttribute('data-selected-ids')||'').split(',').filter(Boolean).sort();
+  assert.deepEqual(marquee,['block-a','block-b'],'iframe marquee failed: '+JSON.stringify({
+    iframeBox,origin,dest,trace:await canvas.getAttribute('data-select-trace'),
+    pointerTarget:await canvas.getAttribute('data-frame-mouse-down'),
+    targetRects:[await frame.locator('[data-spike-id="block-a"]').boundingBox(),await frame.locator('[data-spike-id="block-b"]').boundingBox()]
+  }));
   // Real Selecto marquee → Moveable group drag must update both targets
   // in ONE canonical revision and be undone in one action.
   const boxA=await frame.locator('[data-spike-id="block-a"]').boundingBox();
