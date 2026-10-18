@@ -30,6 +30,10 @@ try{
   await frame.waitForSelector('[data-spike-id="block-a"]',{timeout:5000});
   const specimens=await frame.locator('[data-spike-id]').count();
   assert.equal(specimens,3,'Three specimen elements must be visible in iframe');
+  // The string label must be inert literal text even if it resembles markup.
+  assert.equal(await frame.locator('[data-spike-id="block-c"] strong').count(),0,'Editor parsed a user label as HTML');
+  assert((await frame.locator('[data-spike-id="block-c"]').textContent()).includes('<strong>literal</strong>'),
+    'Label was not rendered as literal text');
   const controls=await frame.locator('.moveable-control-box').count();
   assert(controls>0,'Moveable controls not attached inside GrapesJS iframe');
   await page.getByRole('button',{name:'JSONを表示'}).click();
@@ -98,6 +102,26 @@ try{
   assert.deepEqual(afterEscape,original,'Escape should discard preview without touching canonical state');
   const renderAfterEscape=await frame.locator('[data-spike-id="block-a"]').evaluate(el=>({x:parseFloat(getComputedStyle(el).left),y:parseFloat(getComputedStyle(el).top)}));
   assert(Math.abs(renderAfterEscape.x-original.x)<1&&Math.abs(renderAfterEscape.y-original.y)<1,'Escape left stale CSS geometry '+JSON.stringify(renderAfterEscape));
+  // A canceled Moveable gesture must leave handles on the restored element
+  // and permit another gesture immediately; geometry-only tests miss this bug.
+  await page.waitForTimeout(60);
+  const escapeControl=await frame.locator('.moveable-control[data-direction="se"]').first().boundingBox();
+  const escapeElement=await frame.locator('[data-spike-id="block-a"]').boundingBox();
+  assert(escapeControl&&escapeElement,'Moveable controls not visible after Escape');
+  assert(Math.abs(escapeControl.x+escapeControl.width/2-(escapeElement.x+escapeElement.width))<7 &&
+    Math.abs(escapeControl.y+escapeControl.height/2-(escapeElement.y+escapeElement.height))<7,
+    'Moveable handle remained at stale preview geometry '+JSON.stringify({escapeControl,escapeElement}));
+  const beforeRetry=JSON.parse(await page.locator('#dump').textContent()).revision;
+  const retryX=escapeElement.x+escapeElement.width/2,retryY=escapeElement.y+escapeElement.height/2;
+  await page.mouse.move(retryX,retryY);await page.mouse.down();
+  await page.mouse.move(retryX+18,retryY+12,{steps:8});await page.mouse.up();
+  await page.getByRole('button',{name:'JSONを表示'}).click();
+  const afterRetry=JSON.parse(await page.locator('#dump').textContent());
+  assert.equal(afterRetry.revision,beforeRetry+1,'New gesture after Escape was blocked');
+  await page.getByRole('button',{name:'元に戻す'}).click();
+  await page.getByRole('button',{name:'JSONを表示'}).click();
+  assert.deepEqual(JSON.parse(await page.locator('#dump').textContent()).elements.find(e=>e.id==='block-a').geometry,original,
+    'Undo after retry failed');
 
     // Verify direct resize handle, not just keyboard-free model API updates.
   const resizeHandle=frame.locator('.moveable-control[data-direction="se"]');
@@ -255,7 +279,15 @@ try{
   const resetOrder=['block-a','block-b','block-c'];
   assert.deepEqual(JSON.parse(await page.locator('#dump').textContent()).elements.map(e=>e.id),resetOrder,'reorder undo fails');
   assert.deepEqual(await frame.locator('[data-spike-id]').evaluateAll(els=>els.map(e=>e.dataset.spikeId)),resetOrder,'document reorder undo fails');
-  assert.deepEqual(errors,[],'Browser uncaught exceptions: '+errors.join('; '));
+  // Host's own input Undo must not be captured by editor shortcuts.
+  await page.evaluate(()=>{
+    const x=document.createElement('input');x.id='host-entry';x.value='original';document.body.append(x);
+  });
+  const hostStatus=await page.locator('#status').textContent();
+  await page.locator('#host-entry').focus();
+  await page.locator('#host-entry').press('Control+z');
+  assert.equal(await page.locator('#status').textContent(),hostStatus,'Editor hijacked host text input Undo');
+    assert.deepEqual(errors,[],'Browser uncaught exceptions: '+errors.join('; '));
   console.log(JSON.stringify({status:'BROWSER_BOOT_SMOKE_PASS',specimens,moveableControls:controls},null,2));
 }finally{
   if(browser)await browser.close();

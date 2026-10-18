@@ -11,10 +11,11 @@ import './spike.css';
 const seed=[
   { id:'block-a',label:'見出し',geometry:{x:30,y:30,width:180,height:76} },
   { id:'block-b',label:'カード',geometry:{x:246,y:80,width:150,height:110} },
-  { id:'block-c',label:'設定欄',geometry:{x:70,y:204,width:230,height:78} }
+  { id:'block-c',label:'設定欄 <strong>literal</strong>',geometry:{x:70,y:204,width:230,height:78} }
 ];
 const model=createLayoutModel(seed);
 const gate=new GestureGate();
+let moveableInstance=null;
 const status=document.querySelector('#status');
 const show=s=>{status.textContent=s;};
 const styleFor=g=>({position:'absolute',left:g.x+'px',top:g.y+'px',width:g.width+'px',height:g.height+'px','box-sizing':'border-box','background-color':'#e0eee9',border:'1px solid #89b4a5',padding:'10px'});
@@ -24,7 +25,7 @@ const editor=grapesjs.init({
   // M0: host model is the only history/keyboard authority, never GrapesJS.
   undoManager:false,keymaps:{defaults:{}},showToolbar:false,panels:{defaults:[]},
   fromElement:false,blockManager:{},
-  components:seed.map(e=>({tagName:'div',attributes:{'data-spike-id':e.id},name:e.label,draggable:false,resizable:false,stylable:false,removable:false,copyable:false,selectable:false,hoverable:false,toolbar:[],style:styleFor(e.geometry),components:e.label}))
+  components:seed.map(e=>({tagName:'div',attributes:{'data-spike-id':e.id},name:e.label,draggable:false,resizable:false,stylable:false,removable:false,copyable:false,selectable:false,hoverable:false,toolbar:[],style:styleFor(e.geometry),components:[]}))
 });
 const components=()=>editor.getWrapper().find('[data-spike-id]');
 function sync() {
@@ -38,7 +39,7 @@ function sync() {
     // Moveable previews touch DOM inline styles; force the canonical geometry
     // after every commit/Undo/cancel so pixels cannot diverge from the model.
     const node=cmp.getEl();
-    if(node){const g=e.geometry;Object.assign(node.style,{left:g.x+'px',top:g.y+'px',width:g.width+'px',height:g.height+'px'});}
+    if(node){const g=e.geometry;Object.assign(node.style,{left:g.x+'px',top:g.y+'px',width:g.width+'px',height:g.height+'px'});node.textContent=e.label;}
     if(wrapper.components().indexOf(cmp)!==index)cmp.move(wrapper,{at:index});
   }
   const list=document.querySelector('#layers');
@@ -48,14 +49,17 @@ function sync() {
       if(node)list.append(node);
     }
   }
+  moveableInstance?.updateRect();
 }
 function locate(id){return editor.Canvas.getBody()?.querySelector(`[data-spike-id="${id}"]`);}
 const moveableReady=()=>editor.Canvas.getBody()&&locate('block-a');
 editor.on('load',()=>{
   if(!moveableReady()){show('キャンバス未確認');return;}
+  sync(); // Render labels as inert textContent, never parse model labels as HTML.
   const frameBody=editor.Canvas.getBody();
   const frameDoc=frameBody.ownerDocument;
   const moveable=new Moveable(frameBody,{target:locate('block-a'),container:frameBody,draggable:true,resizable:true,origin:false,snappable:true});
+  moveableInstance=moveable;
   // Follow upstream Selecto iframe fixture: drag/key listener belongs to the iframe window,
   // not the body. This avoids lost marquee gestures across GrapesJS' iframe boundary.
   const frameWindow=frameDoc.defaultView;
@@ -153,10 +157,14 @@ editor.on('load',()=>{
   };
   const keyRoute=(e)=>{
     if(e.key==='Escape'&&gate.active){e.preventDefault();e.stopPropagation();cancelActive('Escape');return;}
-    if((e.ctrlKey||e.metaKey)&&!e.altKey&&e.key.toLowerCase()==='z'){
+    // Do not steal text-entry history from host input/textarea or rich-text editors.
+    if(e.target?.closest?.('input,textarea,select,[contenteditable]')||e.target?.isContentEditable)return;
+    const isUndo=(e.ctrlKey||e.metaKey)&&!e.altKey&&e.key.toLowerCase()==='z';
+    const isRedoY=(e.ctrlKey||e.metaKey)&&!e.altKey&&e.key.toLowerCase()==='y';
+    if(isUndo||isRedoY){
       e.preventDefault();e.stopPropagation();
       if(gate.active){show('操作中はUndoできません');return;}
-      if(e.shiftKey){model.redo();sync();show('Redo');}
+      if(e.shiftKey||isRedoY){model.redo();sync();show('Redo');}
       else {model.undo();sync();show('Undo');}
     }
   };
