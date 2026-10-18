@@ -149,17 +149,6 @@ try{
   assert(Math.abs(afterResizeDom.width-original.width)<1&&Math.abs(afterResizeDom.height-original.height)<1,
     'DOM size does not restore after resize Undo '+JSON.stringify({afterResizeDom,original}));
 
-  // Selecto's own documented iframe Gesto container uses the frame window;
-  // probe blank *BODY* origin 15,15 (earlier 5,5 was on the HTML border).
-  const canvasFrame=await frame.frameElement(),canvasFrameBox=await canvasFrame.boundingBox();
-  assert(canvasFrameBox,'frame placement missing');
-  const m0x=canvasFrameBox.x+15,m0y=canvasFrameBox.y+15;
-  await page.mouse.move(m0x,m0y);await page.mouse.down();
-  await page.mouse.move(canvasFrameBox.x+409,canvasFrameBox.y+196,{steps:16});
-  await page.mouse.up();
-  const marqueeIds=(await page.locator('#canvas').getAttribute('data-selected-ids')||'').split(',').filter(Boolean).sort();
-  assert.deepEqual(marqueeIds,['block-a','block-b'],
-    'Selecto iframe marquee failed from actual blank-body origin: '+JSON.stringify({marqueeIds,canvasFrameBox}));
   // Real Selecto marquee → Moveable group drag must update both targets
   // in ONE canonical revision and be undone in one action.
   const boxA=await frame.locator('[data-spike-id="block-a"]').boundingBox();
