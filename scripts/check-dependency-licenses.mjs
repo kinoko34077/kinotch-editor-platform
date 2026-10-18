@@ -5,7 +5,7 @@ if(lock.lockfileVersion!==3||lock.name!=='kinotch-editor-platform-m0')throw new 
 const root=lock.packages?.[''];
 if(!root?.dependencies||!root?.devDependencies)throw new Error('missing pinned direct dependencies');
 for(const [name,version] of Object.entries({...root.dependencies,...root.devDependencies})){
-  if(!/^\\d+\\.\\d+\\.\\d+(?:[-+][0-9A-Za-z.-]+)?$/.test(version))
+  if(!/^[0-9]+[.][0-9]+[.][0-9]+(?:[-+][0-9A-Za-z.-]+)?$/.test(version))
     throw new Error('direct dependency not exact-version pinned: '+name);
 }
 const entries=Object.entries(lock.packages).filter(([name])=>name.startsWith('node_modules/'));
