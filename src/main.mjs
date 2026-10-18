@@ -89,13 +89,16 @@ editor.on('load',()=>{
   };
   const isBlankTarget=e=>e.target===frameBody||e.target===frameDoc.documentElement;
   frameDoc.addEventListener('pointerdown',e=>{
+    document.querySelector('#canvas').dataset.m0PointerSource=(e.target?.tagName||'unknown')+':'+(e.target?.className||'')+' blank='+isBlankTarget(e)+' gate='+!!gate.active;
     if(e.button!==0||!e.isPrimary||gate.active||!isBlankTarget(e))return;
     marquee={pointerId:e.pointerId,start:[e.clientX,e.clientY],end:[e.clientX,e.clientY],extend:e.shiftKey};
+    document.querySelector('#canvas').dataset.m0MarqueeStarted='yes';
     try{frameBody.setPointerCapture(e.pointerId);}catch{ /* Pointer capture unavailable: document listener remains */ }
   },true);
   frameDoc.addEventListener('pointermove',e=>{
     if(!marquee||e.pointerId!==marquee.pointerId)return;
     marquee.end=[e.clientX,e.clientY];
+    document.querySelector('#canvas').dataset.m0MarqueeMove=JSON.stringify(marquee.end);
     const [x,y]=marquee.start;
     const left=Math.min(x,e.clientX),top=Math.min(y,e.clientY);
     Object.assign(selectionBox.style,{left:left+'px',top:top+'px',
@@ -104,6 +107,7 @@ editor.on('load',()=>{
   frameDoc.addEventListener('pointerup',e=>{
     if(!marquee||e.pointerId!==marquee.pointerId)return;
     const state=marquee;hideMarquee();
+    document.querySelector('#canvas').dataset.m0MarqueeEnd=JSON.stringify({start:state.start,end:[e.clientX,e.clientY]});
     try{if(frameBody.hasPointerCapture(e.pointerId))frameBody.releasePointerCapture(e.pointerId);}catch{}
     const [x,y]=state.start;
     let next=[];
@@ -116,6 +120,7 @@ editor.on('load',()=>{
     }
     selecto.setSelectedTargets(next);
     chosen(next);
+    document.querySelector('#canvas').dataset.m0MarqueeResult=next.map(el=>el.dataset.spikeId).join(',');
     show('範囲選択: '+next.map(el=>el.dataset.spikeId).join(', '));
   },true);
   frameDoc.addEventListener('pointercancel',()=>hideMarquee(),true);

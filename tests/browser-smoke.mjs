@@ -158,7 +158,13 @@ try{
   await page.mouse.move(selectionBounds.x+409,selectionBounds.y+196,{steps:16});
   await page.mouse.up();
   const directSelected=(await page.locator('#canvas').getAttribute('data-selected-ids')||'').split(',').filter(Boolean).sort();
-  assert.deepEqual(directSelected,['block-a','block-b'],'Blank-canvas marquee must select both elements via Selecto public API');
+  assert.deepEqual(directSelected,['block-a','block-b'],'Blank-canvas marquee must select both elements via Selecto public API: '+JSON.stringify({
+    source:await page.locator('#canvas').getAttribute('data-m0-pointer-source'),
+    started:await page.locator('#canvas').getAttribute('data-m0-marquee-started'),
+    moved:await page.locator('#canvas').getAttribute('data-m0-marquee-move'),
+    ended:await page.locator('#canvas').getAttribute('data-m0-marquee-end'),
+    result:await page.locator('#canvas').getAttribute('data-m0-marquee-result')
+  }));
   // Real Selecto marquee → Moveable group drag must update both targets
   // in ONE canonical revision and be undone in one action.
   const boxA=await frame.locator('[data-spike-id="block-a"]').boundingBox();
