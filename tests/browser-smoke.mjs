@@ -165,13 +165,24 @@ try{
     ended:await page.locator('#canvas').getAttribute('data-m0-marquee-end'),
     result:await page.locator('#canvas').getAttribute('data-m0-marquee-result')
   }));
-  // Real Selecto marquee → Moveable group drag must update both targets
+  // Additive blank-canvas marquee must preserve the previous selection.
+  // New rectangle lies beneath B and contains C only.
+  await page.keyboard.down('Shift');
+  await page.mouse.move(selectionBounds.x+15,selectionBounds.y+195);
+  await page.mouse.down();
+  await page.mouse.move(selectionBounds.x+310,selectionBounds.y+288,{steps:12});
+  await page.mouse.up();
+  await page.keyboard.up('Shift');
+  const unionIds=(await page.locator('#canvas').getAttribute('data-selected-ids')||'').split(',').filter(Boolean).sort();
+  assert.deepEqual(unionIds,['block-a','block-b','block-c'],
+    'Shift marquee must union prior selection with third target');
+    // Real Selecto marquee → Moveable group drag must update both targets
   // in ONE canonical revision and be undone in one action.
   const boxA=await frame.locator('[data-spike-id="block-a"]').boundingBox();
   const boxB=await frame.locator('[data-spike-id="block-b"]').boundingBox();
   assert(boxA&&boxB,'Group selection specimens missing');
   // User-visible accessible layer controls provide a second Selecto route;
-  // iframe marquee is separately unverified and must not be claimed here.
+  // iframe marquee is verified separately above; layer controls remain a keyboard route.
   await page.locator('#layers [data-select-id="block-a"]').click();
   await page.locator('#layers [data-select-id="block-b"]').click({modifiers:['Shift']});
   // Selection is synchronized through Selecto's public API, not an undocumented

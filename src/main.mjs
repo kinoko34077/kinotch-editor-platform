@@ -97,7 +97,7 @@ editor.on('load',()=>{
   frameDoc.addEventListener('pointerdown',e=>{
     document.querySelector('#canvas').dataset.m0PointerSource=(e.target?.tagName||'unknown')+':'+(e.target?.className||'')+' blank='+isBlankTarget(e)+' gate='+!!gate.active;
     if(e.button!==0||!e.isPrimary||gate.active||!isBlankTarget(e))return;
-    marquee={pointerId:e.pointerId,start:[e.clientX,e.clientY],end:[e.clientX,e.clientY],extend:e.shiftKey};
+    marquee={pointerId:e.pointerId,start:[e.clientX,e.clientY],end:[e.clientX,e.clientY],extend:e.shiftKey,prior:selecto.getSelectedTargets()};
     document.querySelector('#canvas').dataset.m0MarqueeStarted='yes';
     try{frameBody.setPointerCapture(e.pointerId);}catch{ /* Pointer capture unavailable: document listener remains */ }
   },true);
@@ -121,8 +121,7 @@ editor.on('load',()=>{
       next=selecto.setSelectedTargetsByPoints(state.start,[e.clientX,e.clientY]).selected;
     }
     if(state.extend){
-      const prior=selecto.getSelectedTargets();
-      next=[...new Set([...prior,...next])];
+      next=[...new Set([...state.prior,...next])];
     }
     selecto.setSelectedTargets(next);
     chosen(next);
