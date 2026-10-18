@@ -8,7 +8,8 @@
     "build": "vite build",
     "test": "node --test tests/*.test.mjs",
     "check": "npm run test && npm run build",
-    "test:browser": "node tests/browser-smoke.mjs"
+    "test:browser": "node tests/browser-smoke.mjs",
+    "check:licenses": "node scripts/check-dependency-licenses.mjs"
   },
   "dependencies": {
     "grapesjs": "0.23.6",

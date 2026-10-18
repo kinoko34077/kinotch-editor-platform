@@ -26,6 +26,8 @@ jobs:
           node-version: '22'
       - name: Install reproducible locked dependencies
         run: npm ci --no-audit --no-fund
+      - name: Audit locked license metadata (not legal clearance)
+        run: npm run check:licenses
       - name: Contract tests
         run: npm test
       - name: Static build (not browser acceptance)
