@@ -87,7 +87,13 @@ editor.on('load',()=>{
     selectionBox.style.display='none';
     marquee=null;
   };
-  const isBlankTarget=e=>e.target===frameBody||e.target===frameDoc.documentElement;
+  // GrapesJS paints a full-canvas wrapper (often class gjs-hovered) above
+  // the body; pointer.target is that wrapper, not the body on blank canvas.
+  // Only actual model-owned components / manipulators / inputs block marquee.
+  const isBlankTarget=e=>{
+    const target=e.target;
+    return !!target&&!target.closest?.('[data-spike-id],.moveable-control-box,input,textarea,button,select,[contenteditable]');
+  };
   frameDoc.addEventListener('pointerdown',e=>{
     document.querySelector('#canvas').dataset.m0PointerSource=(e.target?.tagName||'unknown')+':'+(e.target?.className||'')+' blank='+isBlankTarget(e)+' gate='+!!gate.active;
     if(e.button!==0||!e.isPrimary||gate.active||!isBlankTarget(e))return;
