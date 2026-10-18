@@ -63,7 +63,7 @@ editor.on('load',()=>{
   // Follow upstream Selecto iframe fixture: drag/key listener belongs to the iframe window,
   // not the body. This avoids lost marquee gestures across GrapesJS' iframe boundary.
   const frameWindow=frameDoc.defaultView;
-  const selecto=new Selecto({container:frameBody,dragContainer:frameWindow,keyContainer:frameWindow,hitRate:0,selectableTargets:[...components()].map(c=>c.getEl()),selectByClick:true,selectFromInside:false,toggleContinueSelect:'shift'});
+  const selecto=new Selecto({container:frameBody,dragContainer:frameWindow,keyContainer:frameWindow,hitRate:0,selectableTargets:[...components()].map(c=>c.getEl()),selectByClick:true,selectFromInside:false,toggleContinueSelect:'shift',dragCondition:()=>false});
   function initial(target){const id=target?.getAttribute('data-spike-id');return id&&model.elements.find(e=>e.id===id);}
   function chosen(els){const targets=els.filter(el=>el?.matches?.('[data-spike-id]'));
     moveable.target=targets.length===1?targets[0]:(targets.length?targets:[]);
@@ -74,6 +74,53 @@ editor.on('load',()=>{
   }
   // Do not let Selecto retarget Moveable midway through an active transform.
   selecto.on('select',e=>{if(!gate.active)chosen(e.selected);});
+  // GrapesJS iframe/Gesto does not reliably deliver native area-drag.
+  // Only a thin pointer/visual adapter lives here; ALL actual rectangle hit
+  // tests and selected-target bookkeeping remain in Selecto's public API.
+  const selectionBox=frameDoc.createElement('div');
+  selectionBox.setAttribute('aria-hidden','true');
+  Object.assign(selectionBox.style,{position:'fixed',pointerEvents:'none',zIndex:'100000',
+    border:'1px dashed #317960',background:'rgba(69,152,126,.15)',display:'none'});
+  frameBody.append(selectionBox);
+  let marquee=null;
+  const hideMarquee=()=>{
+    selectionBox.style.display='none';
+    marquee=null;
+  };
+  const isBlankTarget=e=>e.target===frameBody||e.target===frameDoc.documentElement;
+  frameDoc.addEventListener('pointerdown',e=>{
+    if(e.button!==0||!e.isPrimary||gate.active||!isBlankTarget(e))return;
+    marquee={pointerId:e.pointerId,start:[e.clientX,e.clientY],end:[e.clientX,e.clientY],extend:e.shiftKey};
+    try{frameBody.setPointerCapture(e.pointerId);}catch{ /* Pointer capture unavailable: document listener remains */ }
+  },true);
+  frameDoc.addEventListener('pointermove',e=>{
+    if(!marquee||e.pointerId!==marquee.pointerId)return;
+    marquee.end=[e.clientX,e.clientY];
+    const [x,y]=marquee.start;
+    const left=Math.min(x,e.clientX),top=Math.min(y,e.clientY);
+    Object.assign(selectionBox.style,{left:left+'px',top:top+'px',
+      width:Math.abs(e.clientX-x)+'px',height:Math.abs(e.clientY-y)+'px',display:'block'});
+  },true);
+  frameDoc.addEventListener('pointerup',e=>{
+    if(!marquee||e.pointerId!==marquee.pointerId)return;
+    const state=marquee;hideMarquee();
+    try{if(frameBody.hasPointerCapture(e.pointerId))frameBody.releasePointerCapture(e.pointerId);}catch{}
+    const [x,y]=state.start;
+    let next=[];
+    if(Math.hypot(e.clientX-x,e.clientY-y)>4){
+      next=selecto.setSelectedTargetsByPoints(state.start,[e.clientX,e.clientY]).selected;
+    }
+    if(state.extend){
+      const prior=selecto.getSelectedTargets();
+      next=[...new Set([...prior,...next])];
+    }
+    selecto.setSelectedTargets(next);
+    chosen(next);
+    show('範囲選択: '+next.map(el=>el.dataset.spikeId).join(', '));
+  },true);
+  frameDoc.addEventListener('pointercancel',()=>hideMarquee(),true);
+  frameWindow.addEventListener('blur',hideMarquee);
+
   let ongoingId=null;
   let groupTargets=[];
   // Moveable's official group events give per-target coordinates. A group is

@@ -149,6 +149,16 @@ try{
   assert(Math.abs(afterResizeDom.width-original.width)<1&&Math.abs(afterResizeDom.height-original.height)<1,
     'DOM size does not restore after resize Undo '+JSON.stringify({afterResizeDom,original}));
 
+  // A blank-canvas pointer marquee delegates hit-testing to Selecto public API;
+  // no bespoke geometry intersection algorithm is permitted in the adapter.
+  const selectionFrame=await frame.frameElement(), selectionBounds=await selectionFrame.boundingBox();
+  assert(selectionBounds,'iframe bounding box absent for marquee test');
+  await page.mouse.move(selectionBounds.x+15,selectionBounds.y+15);
+  await page.mouse.down();
+  await page.mouse.move(selectionBounds.x+409,selectionBounds.y+196,{steps:16});
+  await page.mouse.up();
+  const directSelected=(await page.locator('#canvas').getAttribute('data-selected-ids')||'').split(',').filter(Boolean).sort();
+  assert.deepEqual(directSelected,['block-a','block-b'],'Blank-canvas marquee must select both elements via Selecto public API');
   // Real Selecto marquee → Moveable group drag must update both targets
   // in ONE canonical revision and be undone in one action.
   const boxA=await frame.locator('[data-spike-id="block-a"]').boundingBox();
