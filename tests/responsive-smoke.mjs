@@ -5,11 +5,17 @@ import {chromium} from 'playwright-core';
 
 const port=5176,origin='http://127.0.0.1:'+port+'/';
 const server=spawn(process.platform==='win32'?'npm.cmd':'npm',['run','dev','--','--port',String(port),'--strictPort'],
-  {stdio:['ignore','pipe','pipe']});
+  {stdio:['ignore','pipe','pipe'],detached:process.platform!=='win32'});
 let output='';
 server.stdout.on('data',x=>output+=String(x).slice(0,1200));
 server.stderr.on('data',x=>output+=String(x).slice(0,1200));
 const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+function within(promise,ms,phase){
+  let timer;
+  return Promise.race([promise,new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error('Mobile viewport timeout: '+phase)),ms);})])
+    .finally(()=>clearTimeout(timer));
+}
+
 let browser;
 try{
   let ready=false;
@@ -23,15 +29,17 @@ try{
   const widths=[320,375,390,430,768];
   const measured=[];
   for(const width of widths){
+    console.log('M0_MOBILE_WIDTH_START '+width);
     const ctx=await browser.newContext({viewport:{width,height:850},deviceScaleFactor:2,
       hasTouch:true,isMobile:true});
     try{
       const page=await ctx.newPage();
       const errors=[];
       page.on('pageerror',e=>errors.push(e.message));
-      await page.goto(origin,{waitUntil:'domcontentloaded'});
-      await page.waitForFunction(()=>document.querySelector('#status')?.textContent?.includes('M0実験画面'),
-        null,{timeout:25000});
+      page.setDefaultTimeout(10000);
+      await within(page.goto(origin,{waitUntil:'domcontentloaded',timeout:15000}),18000,'navigate '+width);
+      await within(page.waitForFunction(()=>document.querySelector('#status')?.textContent?.includes('M0実験画面'),
+        null,{timeout:12000}),15000,'editor-load '+width);
       const rect=await page.evaluate(()=>{
         const canvas=document.querySelector('#canvas'),sidebar=document.querySelector('aside');
         const r=el=>{const x=el.getBoundingClientRect();return {width:x.width,height:x.height,left:x.left,right:x.right}};
@@ -50,10 +58,14 @@ try{
       assert.deepEqual(errors,[],'runtime exceptions on simulated mobile '+width+': '+errors.join('; '));
       measured.push({width,scrollWidth:rect.docScrollWidth,canvasWidth:Math.round(rect.canvas.width),
         sidebarWidth:Math.round(rect.sidebar.width)});
-    }finally{await ctx.close();}
+      console.log('M0_MOBILE_WIDTH_PASS '+width+' '+JSON.stringify(rect));
+    }finally{await within(ctx.close(),15000,'context-close '+width);}
   }
   console.log('M0_MOBILE_VIEWPORT_CHROME_SIMULATION_PASS '+JSON.stringify(measured));
 }finally{
-  if(browser)await browser.close();
-  server.kill('SIGTERM');
+  if(browser)await within(browser.close(),15000,'browser-close');
+  if(process.platform!=='win32'){
+    try{process.kill(-server.pid,'SIGTERM');}catch{server.kill('SIGTERM');}
+  }else server.kill('SIGTERM');
+  server.stdout.destroy();server.stderr.destroy();
 }
