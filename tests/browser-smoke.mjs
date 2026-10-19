@@ -43,7 +43,7 @@ try{
     ['block-a','block-c'],'Shift-click on specimen failed additive selection');
   await frame.locator('[data-spike-id="block-a"]').click({position:{x:30,y:20}});
   assert.equal(await page.locator('#canvas').getAttribute('data-selected-ids'),'block-a',
-    'Direct canvas click must replace selected targets: '+await page.locator('#canvas').getAttribute('data-direct-click-trace'));
+    'Direct canvas click must replace selected targets: '+JSON.stringify({trace:await page.locator('#canvas').getAttribute('data-direct-click-trace'),applied:await page.locator('#canvas').getAttribute('data-direct-click-applied'),status:await page.locator('#status').textContent()}));
     const controls=await frame.locator('.moveable-control-box').count();
   assert(controls>0,'Moveable controls not attached inside GrapesJS iframe');
   await page.getByRole('button',{name:'JSONを表示'}).click();

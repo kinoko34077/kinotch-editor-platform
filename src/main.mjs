@@ -121,6 +121,10 @@ editor.on('load',()=>{
     const prev=selecto.getSelectedTargets().filter(x=>x?.isConnected);
     const next=pending.add?(prev.includes(el)?prev.filter(x=>x!==el):[...prev,el]):[el];
     selecto.setSelectedTargets(next);chosen(next);
+    traceClick('applied',e,el);
+    document.querySelector('#canvas').dataset.directClickApplied=JSON.stringify({
+      ids:next.map(x=>x.dataset.spikeId),now:document.querySelector('#canvas').dataset.selectedIds
+    });
     show('直接選択: '+next.map(x=>x.dataset.spikeId).join(', '));
   },true);
     // Do not let Selecto retarget Moveable midway through an active transform.
