@@ -67,7 +67,7 @@ editor.on('load',()=>{
   function initial(target){const id=target?.getAttribute('data-spike-id');return id&&model.elements.find(e=>e.id===id);}
   function chosen(els){const targets=els.filter(el=>el?.matches?.('[data-spike-id]'));
     moveable.target=targets.length===1?targets[0]:(targets.length?targets:[]);
-    moveable.updateRect(); // Keep the floating drag target on the selected element, not prior selection.
+    // Moveable re-renders target-array changes asynchronously; sync() owns later updateRect.
     document.querySelector('#canvas').dataset.selectedIds=targets.map(el=>el.dataset.spikeId).join(','); // M0 test fixture diagnostic
     for(const btn of document.querySelectorAll('#layers [data-select-id]')){
       btn.setAttribute('aria-pressed',String(targets.some(el=>el.dataset.spikeId===btn.dataset.selectId)));
