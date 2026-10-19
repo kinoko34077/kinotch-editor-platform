@@ -58,7 +58,7 @@ editor.on('load',()=>{
   sync(); // Render labels as inert textContent, never parse model labels as HTML.
   const frameBody=editor.Canvas.getBody();
   const frameDoc=frameBody.ownerDocument;
-  const moveable=new Moveable(frameBody,{target:locate('block-a'),container:frameBody,draggable:true,resizable:true,origin:false,snappable:true});
+  const moveable=new Moveable(frameBody,{target:locate('block-a'),container:frameBody,draggable:true,resizable:true,origin:false,snappable:true,passDragArea:true});
   moveableInstance=moveable;
   // Follow upstream Selecto iframe fixture: drag/key listener belongs to the iframe window,
   // not the body. This avoids lost marquee gestures across GrapesJS' iframe boundary.
