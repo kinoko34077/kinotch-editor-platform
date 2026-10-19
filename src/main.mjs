@@ -99,13 +99,17 @@ editor.on('load',()=>{
       clickCandidate=null;return;
     }
     clickCandidate={id:el.dataset.spikeId,pointerId:e.pointerId,x:e.clientX,y:e.clientY,add:e.shiftKey||e.ctrlKey||e.metaKey};
+    traceClick('set',e,el);
   },true);
   frameDoc.addEventListener('pointermove',e=>{
     if(clickCandidate&&e.pointerId===clickCandidate.pointerId&&
-      Math.hypot(e.clientX-clickCandidate.x,e.clientY-clickCandidate.y)>4)clickCandidate=null;
+      Math.hypot(e.clientX-clickCandidate.x,e.clientY-clickCandidate.y)>4){
+      traceClick('moved',e,clickHit(e));clickCandidate=null;
+    }
   },true);
-  frameDoc.addEventListener('pointercancel',()=>{clickCandidate=null;},true);
+  frameDoc.addEventListener('pointercancel',e=>{traceClick('cancel',e,clickHit(e));clickCandidate=null;},true);
   frameDoc.addEventListener('click',e=>{
+    traceClick('click-before',e,clickHit(e));
     const pending=clickCandidate;clickCandidate=null;
     // Moveable can still own the pointer transaction during the synthesized
     // click (dragEnd is delivered afterwards). Distance <=4 above is the
