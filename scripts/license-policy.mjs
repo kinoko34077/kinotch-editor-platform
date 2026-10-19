@@ -6,7 +6,7 @@ export function checkLicenseEntry(name, pkg){
   if(common.has(pkg.license))return pkg.license;
   // MPL binaries are only allowed in the existing build-only lightningcss toolchain.
   if(pkg.license==='MPL-2.0'&&pkg.dev===true&&
-      (name==='lightningcss'||/^(?:@[^/]+\\/)?lightningcss(?:-.+)?$/.test(name)))
+      /^lightningcss(?:-[a-z0-9-]+)?$/.test(name))
     return pkg.license;
   throw new Error('Unapproved license or distribution scope: '+name+' ('+pkg.license+')');
 }
