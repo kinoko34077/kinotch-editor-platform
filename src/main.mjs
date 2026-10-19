@@ -76,6 +76,14 @@ editor.on('load',()=>{
   // A click/tap on the *actual* element is the shortest selection route.
   // Distinguish a true click from a drag; geometry writes remain Moveable-owned.
   let clickCandidate=null;
+  const clickTrace=[];
+  const traceClick=(kind,e,hit)=>{
+    clickTrace.push({kind,tag:e.target?.tagName,css:String(e.target?.className||'').slice(0,50),
+      hit:hit?.dataset?.spikeId||null,pending:clickCandidate?.id||null,add:clickCandidate?.add,
+      shift:e.shiftKey,gate:gate.active?.kind||null});
+    if(clickTrace.length>12)clickTrace.shift();
+    document.querySelector('#canvas').dataset.directClickTrace=JSON.stringify(clickTrace);
+  };
   // Moveable group overlays can intercept a click over an underlying member.
   // Native elementsFromPoint includes underlying real targets, without our
   // own geometry-intersection algorithm or bypassing Moveable resize handles.
@@ -86,6 +94,7 @@ editor.on('load',()=>{
   };
   frameDoc.addEventListener('pointerdown',e=>{
     const el=clickHit(e);
+    traceClick('down',e,el);
     if(e.button!==0||!e.isPrimary||!el){
       clickCandidate=null;return;
     }
@@ -103,6 +112,7 @@ editor.on('load',()=>{
     // arbitration condition: never discard a genuine click because of that.
     if(!pending)return;
     const el=clickHit(e);
+    traceClick('click',e,el);
     if(!el||el.dataset.spikeId!==pending.id)return;
     const prev=selecto.getSelectedTargets().filter(x=>x?.isConnected);
     const next=pending.add?(prev.includes(el)?prev.filter(x=>x!==el):[...prev,el]):[el];
