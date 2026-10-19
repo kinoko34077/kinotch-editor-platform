@@ -51,10 +51,45 @@ try{
         'Horizontal overflow at '+width+' px: '+JSON.stringify(rect));
       assert(rect.canvas.width>0&&rect.canvas.height>=300,'canvas unusable '+width+': '+JSON.stringify(rect));
       assert(rect.sidebar.width>0,'layer navigator collapsed at '+width);
+      for(const key of ['main','canvas','sidebar']){
+        assert(rect[key].left>=-1&&rect[key].right<=width+1,
+          key+' extends outside simulated viewport at '+width+': '+JSON.stringify(rect));
+      }
       assert.equal(await page.locator('#layers [data-select-id]').count(),3);
-      await page.locator('#layers [data-select-id="block-a"]').click();
+      // Playwright tap dispatches actual Chrome touch input, unlike click() in
+      // a hasTouch-enabled context. Record pointerType to distinguish them.
+      await page.evaluate(()=>{
+        document.querySelector('#layers').addEventListener('pointerdown',ev=>{
+          document.querySelector('#layers').dataset.lastInputType=ev.pointerType;
+        },{capture:true});
+      });
+      await within(page.locator('#layers [data-select-id="block-a"]').tap(),10000,'touch-tap '+width);
+      assert.equal(await page.locator('#layers').getAttribute('data-last-input-type'),'touch',
+        'Chrome tap did not produce touch pointer type at '+width);
       assert.equal(await page.locator('#canvas').getAttribute('data-selected-ids'),'block-a',
-        'layer select inaccessible in narrow layout '+width);
+        'real Chrome touch tap failed selection at '+width);
+      if(width===390){
+        // Chrome CDP touch swipe over layer text must not accidentally edit the
+        // document, while a dnd-kit drag HANDLE remains a separate gesture.
+        await page.getByRole('button',{name:'JSONを表示'}).click();
+        const beforeTouch=JSON.parse(await page.locator('#dump').textContent());
+        const box=await page.locator('#layers [data-select-id="block-a"]').boundingBox();
+        assert(box,'layer tap target has no box');
+        const x=box.x+box.width/2,y=box.y+box.height/2;
+        const cdp=await ctx.newCDPSession(page);
+        await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x,y}]});
+        for(let i=1;i<=6;i++){
+          await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x,y:y-i*18}]});
+        }
+        await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+        await cdp.detach();
+        await page.getByRole('button',{name:'JSONを表示'}).click();
+        const afterTouch=JSON.parse(await page.locator('#dump').textContent());
+        assert.deepEqual(afterTouch.elements,beforeTouch.elements,
+          'Touch swipe over layer label changed model data');
+        assert.equal(afterTouch.revision,beforeTouch.revision,
+          'Touch swipe accidentally committed an edit revision');
+      }
       assert.deepEqual(errors,[],'runtime exceptions on simulated mobile '+width+': '+errors.join('; '));
       measured.push({width,scrollWidth:rect.docScrollWidth,canvasWidth:Math.round(rect.canvas.width),
         sidebarWidth:Math.round(rect.sidebar.width)});
