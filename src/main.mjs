@@ -76,14 +76,6 @@ editor.on('load',()=>{
   // A click/tap on the *actual* element is the shortest selection route.
   // Distinguish a true click from a drag; geometry writes remain Moveable-owned.
   let clickCandidate=null;
-  const clickTrace=[];
-  const traceClick=(kind,e,hit)=>{
-    clickTrace.push({kind,tag:e.target?.tagName,css:String(e.target?.className||'').slice(0,50),
-      hit:hit?.dataset?.spikeId||null,pending:clickCandidate?.id||null,add:clickCandidate?.add,
-      shift:e.shiftKey,gate:gate.active?.kind||null});
-    if(clickTrace.length>12)clickTrace.shift();
-    document.querySelector('#canvas').dataset.directClickTrace=JSON.stringify(clickTrace);
-  };
   // Moveable group overlays can intercept a click over an underlying member.
   // Native elementsFromPoint includes underlying real targets, without our
   // own geometry-intersection algorithm or bypassing Moveable resize handles.
@@ -94,40 +86,32 @@ editor.on('load',()=>{
   };
   frameDoc.addEventListener('pointerdown',e=>{
     const el=clickHit(e);
-    traceClick('down',e,el);
     if(e.button!==0||!e.isPrimary||!el){
       clickCandidate=null;return;
     }
     clickCandidate={id:el.dataset.spikeId,pointerId:e.pointerId,x:e.clientX,y:e.clientY,add:e.shiftKey||e.ctrlKey||e.metaKey};
-    traceClick('set',e,el);
   },true);
   frameDoc.addEventListener('pointermove',e=>{
     if(clickCandidate&&e.pointerId===clickCandidate.pointerId&&
       Math.hypot(e.clientX-clickCandidate.x,e.clientY-clickCandidate.y)>4){
-      traceClick('moved',e,clickHit(e));clickCandidate=null;
+      clickCandidate=null;
     }
   },true);
-  frameDoc.addEventListener('pointercancel',e=>{traceClick('cancel',e,clickHit(e));clickCandidate=null;},true);
+  frameDoc.addEventListener('pointercancel',()=>{clickCandidate=null;},true);
   frameDoc.addEventListener('click',e=>{
-    traceClick('click-before',e,clickHit(e));
     const pending=clickCandidate;clickCandidate=null;
     // Moveable can still own the pointer transaction during the synthesized
     // click (dragEnd is delivered afterwards). Distance <=4 above is the
     // arbitration condition: never discard a genuine click because of that.
     if(!pending)return;
     const el=clickHit(e);
-    traceClick('click',e,el);
     if(!el||el.dataset.spikeId!==pending.id)return;
     const prev=selecto.getSelectedTargets().filter(x=>x?.isConnected);
     const next=pending.add?(prev.includes(el)?prev.filter(x=>x!==el):[...prev,el]):[el];
     selecto.setSelectedTargets(next);chosen(next);
-    traceClick('applied',e,el);
-    document.querySelector('#canvas').dataset.directClickApplied=JSON.stringify({
-      ids:next.map(x=>x.dataset.spikeId),now:document.querySelector('#canvas').dataset.selectedIds
-    });
     show('直接選択: '+next.map(x=>x.dataset.spikeId).join(', '));
   },true);
-    // Do not let Selecto retarget Moveable midway through an active transform.
+  // Do not let Selecto retarget Moveable midway through an active transform.
   selecto.on('select',e=>{if(!gate.active)chosen(e.selected);});
   // GrapesJS iframe/Gesto does not reliably deliver native area-drag.
   // Only a thin pointer/visual adapter lives here; ALL actual rectangle hit
