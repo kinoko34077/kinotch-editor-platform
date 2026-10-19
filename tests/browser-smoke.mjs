@@ -314,7 +314,39 @@ try{
   await page.locator('#host-entry').focus();
   await page.locator('#host-entry').press('Control+z');
   assert.equal(await page.locator('#status').textContent(),hostStatus,'Editor hijacked host text input Undo');
-    assert.deepEqual(errors,[],'Browser uncaught exceptions: '+errors.join('; '));
+  // M2 standalone visual adapter: tree view and provenance are actionable,
+  // while the production GrapesJS model remains unmodified.
+  await page.locator('#tree-workbench summary').click();
+  assert.equal(await page.locator('#tree-navigator [data-tree-select]').count(),5,
+    'M2 visual tree must show all nested nodes');
+  await page.locator('[data-tree-select="section-a"]').click();
+  await page.locator('[data-tree-field="spacing"]').fill('20');
+  await page.locator('[data-tree-field="spacing"]').press('Tab');
+  await page.locator('[data-tree-select="card-a"]').click();
+  assert.equal(await page.locator('[data-tree-source]').getAttribute('data-tree-origin'),'ancestor');
+  assert.equal(await page.locator('[data-tree-source]').getAttribute('data-tree-source-id'),'section-a');
+  assert.equal(await page.locator('[data-tree-field="spacing"]').inputValue(),'20');
+  await page.locator('[data-tree-field="spacing"]').fill('31');
+  await page.locator('[data-tree-field="spacing"]').press('Tab');
+  assert.equal(await page.locator('[data-tree-source]').getAttribute('data-tree-origin'),'local');
+  await page.locator('[data-tree-select="section-a"]').click();
+  await page.locator('[data-tree-field="spacing"]').fill('44');
+  await page.locator('[data-tree-field="spacing"]').press('Tab');
+  await page.locator('[data-tree-select="card-a"]').click();
+  assert.equal(await page.locator('[data-tree-field="spacing"]').inputValue(),'31',
+    'Child override must survive ancestor modification');
+  await page.locator('[data-tree-reset]').click();
+  assert.equal(await page.locator('[data-tree-field="spacing"]').inputValue(),'44');
+  assert.equal(await page.locator('[data-tree-source]').getAttribute('data-tree-source-id'),'section-a');
+  await page.locator('[data-tree-field="layerName"]').fill('新名称');
+  await page.locator('[data-tree-field="layerName"]').press('Tab');
+  assert.equal(await page.locator('[data-tree-select="card-a"]').textContent(),'新名称');
+  assert.equal(await page.locator('[data-tree-field="renderedText"]').inputValue(),'カードA',
+    'Renaming layer must not overwrite visible rendered text');
+  await page.locator('[data-tree-undo]').click();
+  assert.equal(await page.locator('[data-tree-select="card-a"]').textContent(),'カードA',
+    'Rename Undo must restore layer label');
+      assert.deepEqual(errors,[],'Browser uncaught exceptions: '+errors.join('; '));
   console.log(JSON.stringify({status:'BROWSER_BOOT_SMOKE_PASS',specimens,moveableControls:controls},null,2));
 }finally{
   if(browser)await browser.close();

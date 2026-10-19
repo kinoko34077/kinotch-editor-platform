@@ -1,3 +1,4 @@
+import './tree-demo.mjs';
 /** M0 integration SPIKE. Never attach this to production pages. */
 import grapesjs from 'grapesjs';
 import 'grapesjs/dist/css/grapes.min.css';
