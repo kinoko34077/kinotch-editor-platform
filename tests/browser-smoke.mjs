@@ -41,7 +41,13 @@ try{
   await frame.locator('[data-spike-id="block-a"]').click({position:{x:30,y:20},modifiers:['Shift']});
   assert.deepEqual((await page.locator('#canvas').getAttribute('data-selected-ids')||'').split(',').sort(),
     ['block-a','block-c'],'Shift-click on specimen failed additive selection');
-  await frame.locator('[data-spike-id="block-a"]').click({position:{x:30,y:20}});
+  // A group's Moveable drag overlay legitimately receives the pointer.
+  // Drive the *physical* click coordinate rather than Playwright's strict
+  // target-specific click, so our public-DOM click route can resolve the underlying node.
+  const aClickBox=await frame.locator('[data-spike-id="block-a"]').boundingBox();
+  assert(aClickBox,'Missing A rect for direct click through group overlay');
+  await page.mouse.move(aClickBox.x+32,aClickBox.y+23);
+  await page.mouse.down();await page.mouse.up();
   assert.equal(await page.locator('#canvas').getAttribute('data-selected-ids'),'block-a',
     'Direct canvas click must replace selected targets: '+JSON.stringify({trace:await page.locator('#canvas').getAttribute('data-direct-click-trace'),applied:await page.locator('#canvas').getAttribute('data-direct-click-applied'),errors,status:await page.locator('#status').textContent()}));
     const controls=await frame.locator('.moveable-control-box').count();
