@@ -9,6 +9,8 @@ on:
       - 'package-lock.json'
       - 'index.html'
       - 'docs/M0_SPIKE.md'
+      - 'scripts/**'
+      - 'docs/M0_LICENSE_INVENTORY.md'
       - '.github/workflows/m0-spike-checks.yml'
   workflow_dispatch:
 
