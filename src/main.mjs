@@ -106,6 +106,15 @@ editor.on('load',()=>{
     if(!pending)return;
     const el=clickHit(e);
     if(!el||el.dataset.spikeId!==pending.id)return;
+    // A synthesized click can precede Moveable's dragEnd event. Even a
+    // zero-distance press may have acquired the exclusive GestureGate.
+    // Finish that no-op by cancellation BEFORE retargeting the engine.
+    if(gate.active){
+      gate.cancel();
+      ongoingId=null;
+      groupTargets=[];
+      sync();
+    }
     const prev=selecto.getSelectedTargets().filter(x=>x?.isConnected);
     const next=pending.add?(prev.includes(el)?prev.filter(x=>x!==el):[...prev,el]):[el];
     selecto.setSelectedTargets(next);chosen(next);
@@ -286,9 +295,12 @@ editor.on('load',()=>{
     label.title='方向キー: 位置移動 / Shift+方向キー: 10px / Alt+方向キー: サイズ変更';
     label.addEventListener('keydown',ev=>{
       if(!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(ev.key)||ev.ctrlKey||ev.metaKey||gate.active)return;
+      // Browser auto-repeat must not evict old Undo history (model caps at 50).
+      // Coalesced held-key motion is a separate accessibility improvement.
+      ev.preventDefault();ev.stopPropagation();
+      if(ev.repeat)return;
       const target=locate(element.id);
       if(!target)return;
-      ev.preventDefault();ev.stopPropagation();
       const selected=selecto.getSelectedTargets().filter(x=>x?.isConnected);
       const ids=selected.some(x=>x.dataset.spikeId===element.id)
         ?selected.map(x=>x.dataset.spikeId):[element.id];
