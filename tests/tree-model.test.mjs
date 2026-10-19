@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createTreeModel,parseTreeSnapshotJSON} from '../src/tree-model.mjs';
 const registry={
+  rootTypes:['page'],
+  allowMultipleRoots:false,
   types:{
     page:{allowedChildren:['section'],defaults:{}},
     section:{allowedChildren:['section','card'],defaults:{spacing:12}},
@@ -87,4 +89,43 @@ test('strict snapshot roundtrip and reject duplicate, script-field or corrupt hi
   const invalid=structuredClone(fixture);
   invalid[1].parentId='section-b';
   assert.throws(()=>createTreeModel(invalid,registry),/tree cycle/);
+});
+
+
+test('root policy prohibits orphan/card roots, multiple roots and unnest-to-root',()=>{
+  const m=createTreeModel(fixture,registry);
+  const rev=m.revision;
+  assert.throws(()=>m.move('card-a',null),/invalid root move/);
+  const cardRoot=structuredClone(fixture);cardRoot[3].parentId=null;
+  assert.throws(()=>createTreeModel(cardRoot,registry),/invalid document roots/);
+  const secondPage=[...structuredClone(fixture),node('other-root','page',null)];
+  assert.throws(()=>createTreeModel(secondPage,registry),/invalid document roots/);
+  assert.equal(m.revision,rev);
+});
+test('caller registry mutation cannot alter existing inheritance or container policy',()=>{
+  const supplied=structuredClone(registry);
+  const m=createTreeModel(fixture,supplied);
+  supplied.globalDefaults.emphasis=true;
+  supplied.types.section.allowedChildren.push('page');
+  supplied.types.section.defaults.spacing=999;
+  delete supplied.types.card;
+  assert.deepEqual(m.effective('card-a','emphasis'),{value:false,origin:'global',sourceId:null});
+  assert.equal(m.effective('card-a','spacing').value,4);
+  assert.throws(()=>m.move('root','section-b'),/invalid drop container/);
+  assert.deepEqual(m.getNode('card-a'),fixture[3]);
+});
+test('invalid property name, numeric value, real sibling reorder, and total source length',()=>{
+  const m=createTreeModel(fixture,registry);
+  assert.throws(()=>m.effective('card-a','constructor'),/unsupported field/);
+  assert.throws(()=>m.setOverride('card-a','spacing',Infinity),/incompatible property/);
+  assert.throws(()=>m.setOverride('card-a','spacing',NaN),/incompatible property/);
+  assert.deepEqual(m.children('section-a').map(n=>n.id),['section-b','card-b']);
+  m.move('card-b','section-a','section-b');
+  assert.deepEqual(m.children('section-a').map(n=>n.id),['card-b','section-b']);
+  m.undo();
+  assert.deepEqual(m.children('section-a').map(n=>n.id),['section-b','card-b']);
+  const huge=structuredClone(fixture);
+  for(let i=0;i<150;i++)huge.push(node('bulk-'+String(i),'card','section-a'));
+  for(const n of huge)n.renderedText='x'.repeat(18000);
+  assert.throws(()=>createTreeModel(huge,registry),/too large/);
 });
