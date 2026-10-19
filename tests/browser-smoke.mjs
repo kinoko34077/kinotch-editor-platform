@@ -49,8 +49,8 @@ try{
   await page.mouse.move(aClickBox.x+32,aClickBox.y+23);
   await page.mouse.down();await page.mouse.up();
   assert.equal(await page.locator('#canvas').getAttribute('data-selected-ids'),'block-a',
-    'Direct canvas click must replace selected targets: '+JSON.stringify({trace:await page.locator('#canvas').getAttribute('data-direct-click-trace'),applied:await page.locator('#canvas').getAttribute('data-direct-click-applied'),errors,status:await page.locator('#status').textContent()}));
-    const controls=await frame.locator('.moveable-control-box').count();
+    'Direct canvas click must replace selected targets');
+  const controls=await frame.locator('.moveable-control-box').count();
   assert(controls>0,'Moveable controls not attached inside GrapesJS iframe');
   await page.getByRole('button',{name:'JSONを表示'}).click();
   const json=JSON.parse(await page.locator('#dump').textContent());
