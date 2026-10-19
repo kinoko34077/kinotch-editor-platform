@@ -34,7 +34,17 @@ try{
   assert.equal(await frame.locator('[data-spike-id="block-c"] strong').count(),0,'Editor parsed a user label as HTML');
   assert((await frame.locator('[data-spike-id="block-c"]').textContent()).includes('<strong>literal</strong>'),
     'Label was not rendered as literal text');
-  const controls=await frame.locator('.moveable-control-box').count();
+  // Single click and additive Shift-click on canvas should *select*, not edit.
+  await frame.locator('[data-spike-id="block-c"]').click({position:{x:30,y:20}});
+  assert.equal(await page.locator('#canvas').getAttribute('data-selected-ids'),'block-c',
+    'Direct specimen click did not select C');
+  await frame.locator('[data-spike-id="block-a"]').click({position:{x:30,y:20},modifiers:['Shift']});
+  assert.deepEqual((await page.locator('#canvas').getAttribute('data-selected-ids')||'').split(',').sort(),
+    ['block-a','block-c'],'Shift-click on specimen failed additive selection');
+  await frame.locator('[data-spike-id="block-a"]').click({position:{x:30,y:20}});
+  assert.equal(await page.locator('#canvas').getAttribute('data-selected-ids'),'block-a',
+    'Direct canvas click must replace selected targets');
+    const controls=await frame.locator('.moveable-control-box').count();
   assert(controls>0,'Moveable controls not attached inside GrapesJS iframe');
   await page.getByRole('button',{name:'JSONを表示'}).click();
   const json=JSON.parse(await page.locator('#dump').textContent());
@@ -42,6 +52,25 @@ try{
   assert.equal(json.schema,'m0-layout-poc.v1');
   // An actual pointer interaction is needed; frame boot alone does not prove editing.
   const original=json.elements.find(e=>e.id==='block-a').geometry;
+  // Keyboard-only focused layer nudge and resize use the SAME model history.
+  const focusButton=page.locator('#layers [data-select-id="block-a"]');
+  await focusButton.focus();await focusButton.press('ArrowRight');
+  await page.getByRole('button',{name:'JSONを表示'}).click();
+  let keyJSON=JSON.parse(await page.locator('#dump').textContent());
+  assert.equal(keyJSON.elements.find(e=>e.id==='block-a').geometry.x,original.x+1,'ArrowRight did not nudge selected target');
+  await focusButton.focus();await focusButton.press('Alt+Shift+ArrowDown');
+  await page.getByRole('button',{name:'JSONを表示'}).click();
+  keyJSON=JSON.parse(await page.locator('#dump').textContent());
+  assert.equal(keyJSON.elements.find(e=>e.id==='block-a').geometry.height,original.height+10,
+    'Alt+Shift+ArrowDown did not resize height 10px');
+  await page.getByRole('button',{name:'元に戻す'}).click();
+  await page.getByRole('button',{name:'元に戻す'}).click();
+  await page.getByRole('button',{name:'JSONを表示'}).click();
+  keyJSON=JSON.parse(await page.locator('#dump').textContent());
+  assert.deepEqual(keyJSON.elements.find(e=>e.id==='block-a').geometry,original,'Keyboard Undo two transactions did not restore geometry');
+  assert.equal(await frame.locator('[data-spike-id="block-a"]').evaluate(el=>parseFloat(getComputedStyle(el).left)),
+    original.x,'Keyboard Undo left stale CSS');
+
   const rect=await frame.locator('[data-spike-id="block-a"]').boundingBox();
   assert(rect && rect.width>10 && rect.height>10,'Cannot locate draggable specimen');
   const startX=rect.x+rect.width/2;
