@@ -67,11 +67,59 @@ editor.on('load',()=>{
   function initial(target){const id=target?.getAttribute('data-spike-id');return id&&model.elements.find(e=>e.id===id);}
   function chosen(els){const targets=els.filter(el=>el?.matches?.('[data-spike-id]'));
     moveable.target=targets.length===1?targets[0]:(targets.length?targets:[]);
+    // Moveable re-renders target-array changes asynchronously; sync() owns later updateRect.
     document.querySelector('#canvas').dataset.selectedIds=targets.map(el=>el.dataset.spikeId).join(','); // M0 test fixture diagnostic
     for(const btn of document.querySelectorAll('#layers [data-select-id]')){
       btn.setAttribute('aria-pressed',String(targets.some(el=>el.dataset.spikeId===btn.dataset.selectId)));
     }
   }
+  // A click/tap on the *actual* element is the shortest selection route.
+  // Distinguish a true click from a drag; geometry writes remain Moveable-owned.
+  let clickCandidate=null;
+  // Moveable group overlays can intercept a click over an underlying member.
+  // Native elementsFromPoint includes underlying real targets, without our
+  // own geometry-intersection algorithm or bypassing Moveable resize handles.
+  const clickHit=e=>{
+    if(e.target?.closest?.('.moveable-control[data-direction],input,textarea,button,[contenteditable]'))return null;
+    return e.target?.closest?.('[data-spike-id]')||
+      frameDoc.elementsFromPoint(e.clientX,e.clientY).find(el=>el.matches?.('[data-spike-id]'))||null;
+  };
+  frameDoc.addEventListener('pointerdown',e=>{
+    const el=clickHit(e);
+    if(e.button!==0||!e.isPrimary||!el){
+      clickCandidate=null;return;
+    }
+    clickCandidate={id:el.dataset.spikeId,pointerId:e.pointerId,x:e.clientX,y:e.clientY,add:e.shiftKey||e.ctrlKey||e.metaKey};
+  },true);
+  frameDoc.addEventListener('pointermove',e=>{
+    if(clickCandidate&&e.pointerId===clickCandidate.pointerId&&
+      Math.hypot(e.clientX-clickCandidate.x,e.clientY-clickCandidate.y)>4){
+      clickCandidate=null;
+    }
+  },true);
+  frameDoc.addEventListener('pointercancel',()=>{clickCandidate=null;},true);
+  frameDoc.addEventListener('click',e=>{
+    const pending=clickCandidate;clickCandidate=null;
+    // Moveable can still own the pointer transaction during the synthesized
+    // click (dragEnd is delivered afterwards). Distance <=4 above is the
+    // arbitration condition: never discard a genuine click because of that.
+    if(!pending)return;
+    const el=clickHit(e);
+    if(!el||el.dataset.spikeId!==pending.id)return;
+    // A synthesized click can precede Moveable's dragEnd event. Even a
+    // zero-distance press may have acquired the exclusive GestureGate.
+    // Finish that no-op by cancellation BEFORE retargeting the engine.
+    if(gate.active){
+      gate.cancel();
+      ongoingId=null;
+      groupTargets=[];
+      sync();
+    }
+    const prev=selecto.getSelectedTargets().filter(x=>x?.isConnected);
+    const next=pending.add?(prev.includes(el)?prev.filter(x=>x!==el):[...prev,el]):[el];
+    selecto.setSelectedTargets(next);chosen(next);
+    show('直接選択: '+next.map(x=>x.dataset.spikeId).join(', '));
+  },true);
   // Do not let Selecto retarget Moveable midway through an active transform.
   selecto.on('select',e=>{if(!gate.active)chosen(e.selected);});
   // GrapesJS iframe/Gesto does not reliably deliver native area-drag.
@@ -243,6 +291,34 @@ editor.on('load',()=>{
     const label=document.createElement('button');
     label.type='button';label.dataset.selectId=element.id;label.textContent=element.label;
     label.setAttribute('aria-pressed','false');
+    label.setAttribute('aria-keyshortcuts','ArrowUp ArrowDown ArrowLeft ArrowRight Alt+ArrowUp Alt+ArrowDown Alt+ArrowLeft Alt+ArrowRight');
+    label.title='方向キー: 位置移動 / Shift+方向キー: 10px / Alt+方向キー: サイズ変更';
+    label.addEventListener('keydown',ev=>{
+      if(!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(ev.key)||ev.ctrlKey||ev.metaKey||gate.active)return;
+      // Browser auto-repeat must not evict old Undo history (model caps at 50).
+      // Coalesced held-key motion is a separate accessibility improvement.
+      ev.preventDefault();ev.stopPropagation();
+      if(ev.repeat)return;
+      const target=locate(element.id);
+      if(!target)return;
+      const selected=selecto.getSelectedTargets().filter(x=>x?.isConnected);
+      const ids=selected.some(x=>x.dataset.spikeId===element.id)
+        ?selected.map(x=>x.dataset.spikeId):[element.id];
+      const delta=(ev.key==='ArrowRight'||ev.key==='ArrowDown'?1:-1)*(ev.shiftKey?10:1);
+      const horizontal=ev.key==='ArrowRight'||ev.key==='ArrowLeft';
+      const entries=model.elements.filter(x=>ids.includes(x.id)).map(x=>{
+        const g=x.geometry;
+        const geometry=ev.altKey
+          ?{...g,[horizontal?'width':'height']:Math.max(1,g[horizontal?'width':'height']+delta)}
+          :{...g,[horizontal?'x':'y']:g[horizontal?'x':'y']+delta};
+        return {id:x.id,geometry};
+      });
+      try{
+        if(model.updateMany(entries)){
+          sync();show((ev.altKey?'キーボード拡縮':'キーボード移動')+': '+ids.join(', '));
+        }
+      }catch(error){show('キーボード操作保留: '+error.message);}
+    });
     label.addEventListener('click',ev=>{
       if(gate.active)return;
       const target=locate(element.id);
