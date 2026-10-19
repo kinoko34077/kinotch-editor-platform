@@ -346,6 +346,25 @@ try{
   await page.locator('[data-tree-undo]').click();
   assert.equal(await page.locator('[data-tree-select="card-a"]').textContent(),'カードA',
     'Rename Undo must restore layer label');
+  // Parent change affects inherited values at once, and Undo restores source.
+  await page.locator('[data-tree-select="section-b"]').click();
+  await page.locator('[data-tree-field="spacing"]').fill('77');
+  await page.locator('[data-tree-field="spacing"]').press('Tab');
+  await page.locator('[data-tree-select="card-a"]').click();
+  assert.equal(await page.locator('[data-tree-source]').getAttribute('data-tree-source-id'),'section-b');
+  assert.equal(await page.locator('[data-tree-field="spacing"]').inputValue(),'77');
+  assert.equal(await page.locator('[data-tree-parent] option[value="card-a"]').count(),0,
+    'Tree must not offer illegal self-parent drop');
+  await page.locator('[data-tree-parent]').selectOption('section-a');
+  assert.equal(await page.locator('[data-tree-select="section-a"] + ul [data-tree-select="card-a"]').count(),1,
+    'Child should be nested directly under new legal parent');
+  assert.equal(await page.locator('[data-tree-field="spacing"]').inputValue(),'44');
+  assert.equal(await page.locator('[data-tree-source]').getAttribute('data-tree-source-id'),'section-a');
+  await page.locator('[data-tree-undo]').click();
+  assert.equal(await page.locator('[data-tree-field="spacing"]').inputValue(),'77',
+    'Undo parent move must restore nearest inherited ancestor');
+  assert.equal(await page.locator('[data-tree-source]').getAttribute('data-tree-source-id'),'section-b');
+
       assert.deepEqual(errors,[],'Browser uncaught exceptions: '+errors.join('; '));
   console.log(JSON.stringify({status:'BROWSER_BOOT_SMOKE_PASS',specimens,moveableControls:controls},null,2));
 }finally{
