@@ -64,6 +64,8 @@ try{
   await page.getByRole('button',{name:'元に戻す'}).click();
   // Repeated synthetic arrow keydown events must not flood the Undo stack.
   await layerA.focus();
+  await page.getByRole('button',{name:'JSONを表示'}).click();
+  await layerA.focus();
   const revisionBeforeRepeat=JSON.parse(await page.locator('#dump').textContent()).revision;
   await layerA.evaluate(el=>{
     for(let i=0;i<80;i++){
