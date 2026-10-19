@@ -90,7 +90,10 @@ editor.on('load',()=>{
   frameDoc.addEventListener('pointercancel',()=>{clickCandidate=null;},true);
   frameDoc.addEventListener('click',e=>{
     const pending=clickCandidate;clickCandidate=null;
-    if(!pending||gate.active)return;
+    // Moveable can still own the pointer transaction during the synthesized
+    // click (dragEnd is delivered afterwards). Distance <=4 above is the
+    // arbitration condition: never discard a genuine click because of that.
+    if(!pending)return;
     const el=e.target?.closest?.('[data-spike-id]');
     if(!el||el.dataset.spikeId!==pending.id)return;
     const prev=selecto.getSelectedTargets().filter(x=>x?.isConnected);
