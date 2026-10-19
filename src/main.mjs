@@ -76,9 +76,17 @@ editor.on('load',()=>{
   // A click/tap on the *actual* element is the shortest selection route.
   // Distinguish a true click from a drag; geometry writes remain Moveable-owned.
   let clickCandidate=null;
+  // Moveable group overlays can intercept a click over an underlying member.
+  // Native elementsFromPoint includes underlying real targets, without our
+  // own geometry-intersection algorithm or bypassing Moveable resize handles.
+  const clickHit=e=>{
+    if(e.target?.closest?.('.moveable-control[data-direction],input,textarea,button,[contenteditable]'))return null;
+    return e.target?.closest?.('[data-spike-id]')||
+      frameDoc.elementsFromPoint(e.clientX,e.clientY).find(el=>el.matches?.('[data-spike-id]'))||null;
+  };
   frameDoc.addEventListener('pointerdown',e=>{
-    const el=e.target?.closest?.('[data-spike-id]');
-    if(e.button!==0||!e.isPrimary||!el||e.target?.closest?.('.moveable-control-box,[contenteditable],input,textarea,button')){
+    const el=clickHit(e);
+    if(e.button!==0||!e.isPrimary||!el){
       clickCandidate=null;return;
     }
     clickCandidate={id:el.dataset.spikeId,pointerId:e.pointerId,x:e.clientX,y:e.clientY,add:e.shiftKey||e.ctrlKey||e.metaKey};
@@ -94,7 +102,7 @@ editor.on('load',()=>{
     // click (dragEnd is delivered afterwards). Distance <=4 above is the
     // arbitration condition: never discard a genuine click because of that.
     if(!pending)return;
-    const el=e.target?.closest?.('[data-spike-id]');
+    const el=clickHit(e);
     if(!el||el.dataset.spikeId!==pending.id)return;
     const prev=selecto.getSelectedTargets().filter(x=>x?.isConnected);
     const next=pending.add?(prev.includes(el)?prev.filter(x=>x!==el):[...prev,el]):[el];
