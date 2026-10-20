@@ -36,3 +36,5 @@ jobs:
         run: npm run build
       - name: Browser boot smoke in existing runner Chrome
         run: npm run test:browser
+      - name: Simulated mobile viewport smoke (not physical Safari)
+        run: npm run test:mobile:chrome
