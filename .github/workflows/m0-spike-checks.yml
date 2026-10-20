@@ -8,6 +8,7 @@ on:
       - 'package.json'
       - 'package-lock.json'
       - 'index.html'
+      - 'tree-bind.html'
       - 'docs/M0_SPIKE.md'
       - 'scripts/**'
       - 'docs/M0_LICENSE_INVENTORY.md'
@@ -38,3 +39,5 @@ jobs:
         run: npm run test:browser
       - name: Simulated mobile viewport smoke (not physical Safari)
         run: npm run test:mobile:chrome
+      - name: M2 GrapesJS nested component projection (isolated Chrome test)
+        run: npm run test:tree:chrome
