@@ -22,10 +22,12 @@ try{
  await page.waitForFunction(()=>document.querySelector('#tree-bind-status')?.textContent?.startsWith('TREE_BOUND_')&&
    !document.querySelector('#tree-bind-status')?.textContent?.includes('initializing'),null,{timeout:60000});
  assert.match(await page.locator('#tree-bind-status').textContent(),/^TREE_BOUND_READY/);
- const target=page.frames().find(f=>f!==page.mainFrame()&&f.url().includes('about:blank'))||
-    page.frames().find(f=>f!==page.mainFrame());
- assert(target,'GrapesJS iframe not created');
- await target.locator('[data-tree-node-id]').first().waitFor();
+ const candidates=await Promise.all(page.frames().filter(f=>f!==page.mainFrame())
+   .map(async f=>({frame:f,url:f.url(),count:await f.locator('[data-tree-node-id]').count()})));
+ const found=candidates.find(x=>x.count===5);
+ assert(found,'Expected GrapesJS iframe with 5 nodes: '+JSON.stringify(candidates.map(x=>({url:x.url,count:x.count}))));
+ const target=found.frame;
+ await target.locator('[data-tree-node-id]').first().waitFor({state:'attached'});
  const item=id=>target.locator('[data-tree-node-id="'+id+'"]');
  assert.equal(await target.locator('[data-tree-node-id]').count(),5,'GrapesJS actual DOM node count');
  assert.equal(await item('card-a').locator('strong').count(),0,'Rendered text must not be parsed HTML');
