@@ -1,3 +1,10 @@
+// This optional research workbench is isolated from normal M0 boot.
+if(document.querySelector('#tree-workbench-panel')){
+  void import('./tree-demo.mjs').catch(error=>{
+    const panel=document.querySelector('#tree-workbench-panel');
+    if(panel)panel.textContent='階層実験の読み込みに失敗: '+error.message;
+  });
+}
 /** M0 integration SPIKE. Never attach this to production pages. */
 import grapesjs from 'grapesjs';
 import 'grapesjs/dist/css/grapes.min.css';

@@ -374,6 +374,74 @@ try{
   await page.locator('#host-entry').focus();
   await page.locator('#host-entry').press('Control+z');
   assert.equal(await page.locator('#status').textContent(),hostStatus,'Editor hijacked host text input Undo');
+  const originalGrapesNodes=await frame.locator('[data-spike-id]').evaluateAll(els=>els.map(x=>x.dataset.spikeId));
+  // M2 standalone visual adapter: tree view and provenance are actionable,
+  // while the production GrapesJS model remains unmodified.
+  await page.locator('#tree-workbench summary').click();
+  // Review P2: tree rows are vertical nested list items rather than globally
+  // inherited flex rows that squeeze a 4-level hierarchy into one line.
+  const upper=await page.locator('[data-tree-select="section-a"]').boundingBox();
+  const nested=await page.locator('[data-tree-select="section-b"]').boundingBox();
+  assert(upper&&nested&&nested.y>=upper.y+upper.height-2,
+    'Nested child must appear below its parent, not beside it');
+  // Review P2: keyboard Enter activation should preserve focus through redraw.
+  await page.locator('[data-tree-select="section-b"]').focus();
+  await page.locator('[data-tree-select="section-b"]').press('Enter');
+  assert.equal(await page.locator('[data-tree-select="section-b"]').evaluate(el=>document.activeElement===el),true,
+    'Tree keyboard activation lost its focused button');
+  await page.locator('[data-tree-select="card-a"]').focus();
+  await page.locator('[data-tree-select="card-a"]').press('F2');
+  assert.equal(await page.locator('[data-tree-field="layerName"]').evaluate(el=>document.activeElement===el),true,
+    'F2 should focus the editable layer name');
+  assert.equal(await page.locator('#tree-navigator [data-tree-select]').count(),5,
+    'M2 visual tree must show all nested nodes');
+  await page.locator('[data-tree-select="section-a"]').click();
+  await page.locator('[data-tree-field="spacing"]').fill('20');
+  await page.locator('[data-tree-field="spacing"]').press('Tab');
+  await page.locator('[data-tree-select="card-a"]').click();
+  assert.equal(await page.locator('[data-tree-source]').getAttribute('data-tree-origin'),'ancestor');
+  assert.equal(await page.locator('[data-tree-source]').getAttribute('data-tree-source-id'),'section-a');
+  assert.equal(await page.locator('[data-tree-field="spacing"]').inputValue(),'20');
+  await page.locator('[data-tree-field="spacing"]').fill('31');
+  await page.locator('[data-tree-field="spacing"]').press('Tab');
+  assert.equal(await page.locator('[data-tree-source]').getAttribute('data-tree-origin'),'local');
+  await page.locator('[data-tree-select="section-a"]').click();
+  await page.locator('[data-tree-field="spacing"]').fill('44');
+  await page.locator('[data-tree-field="spacing"]').press('Tab');
+  await page.locator('[data-tree-select="card-a"]').click();
+  assert.equal(await page.locator('[data-tree-field="spacing"]').inputValue(),'31',
+    'Child override must survive ancestor modification');
+  await page.locator('[data-tree-reset]').click();
+  assert.equal(await page.locator('[data-tree-field="spacing"]').inputValue(),'44');
+  assert.equal(await page.locator('[data-tree-source]').getAttribute('data-tree-source-id'),'section-a');
+  await page.locator('[data-tree-field="layerName"]').fill('新名称');
+  await page.locator('[data-tree-field="layerName"]').press('Tab');
+  assert.equal(await page.locator('[data-tree-select="card-a"]').textContent(),'新名称');
+  assert.equal(await page.locator('[data-tree-field="renderedText"]').inputValue(),'カードA',
+    'Renaming layer must not overwrite visible rendered text');
+  await page.locator('[data-tree-undo]').click();
+  assert.equal(await page.locator('[data-tree-select="card-a"]').textContent(),'カードA',
+    'Rename Undo must restore layer label');
+  // Parent change affects inherited values at once, and Undo restores source.
+  await page.locator('[data-tree-select="section-b"]').click();
+  await page.locator('[data-tree-field="spacing"]').fill('77');
+  await page.locator('[data-tree-field="spacing"]').press('Tab');
+  await page.locator('[data-tree-select="card-a"]').click();
+  assert.equal(await page.locator('[data-tree-source]').getAttribute('data-tree-source-id'),'section-b');
+  assert.equal(await page.locator('[data-tree-field="spacing"]').inputValue(),'77');
+  assert.equal(await page.locator('[data-tree-parent] option[value="card-a"]').count(),0,
+    'Tree must not offer illegal self-parent drop');
+  await page.locator('[data-tree-parent]').selectOption('section-a');
+  assert.equal(await page.locator('[data-tree-select="section-a"] + ul > li > [data-tree-select="card-a"]').count(),1,
+    'Child should be nested directly under new legal parent');
+  assert.equal(await page.locator('[data-tree-field="spacing"]').inputValue(),'44');
+  assert.equal(await page.locator('[data-tree-source]').getAttribute('data-tree-source-id'),'section-a');
+  await page.locator('[data-tree-undo]').click();
+  assert.equal(await page.locator('[data-tree-field="spacing"]').inputValue(),'77',
+    'Undo parent move must restore nearest inherited ancestor');
+  assert.equal(await page.locator('[data-tree-source]').getAttribute('data-tree-source-id'),'section-b');
+  assert.deepEqual(await frame.locator('[data-spike-id]').evaluateAll(els=>els.map(x=>x.dataset.spikeId)),originalGrapesNodes,
+    'M2 isolated tree panel unexpectedly changed the existing GrapesJS document');
     assert.deepEqual(errors,[],'Browser uncaught exceptions: '+errors.join('; '));
   console.log(JSON.stringify({status:'BROWSER_BOOT_SMOKE_PASS',specimens,moveableControls:controls},null,2));
 }finally{
