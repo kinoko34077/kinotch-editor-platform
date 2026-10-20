@@ -3,7 +3,7 @@ export function mountTreeWorkbench(host,model,canNest){
   if(!host||!model)throw new TypeError('tree workbench host/model required');
   let active='section-a';
   host.replaceChildren();
-  const tree=document.createElement('ul');tree.id='tree-navigator';tree.setAttribute('role','tree');
+  const tree=document.createElement('ul');tree.id='tree-navigator';
   const controls=document.createElement('div');controls.className='tree-properties';
   const makeInput=(field,title)=>{
     const label=document.createElement('label');label.textContent=title;
@@ -30,11 +30,13 @@ export function mountTreeWorkbench(host,model,canNest){
   };
   function draw(){
     const nodes=model.nodes,selected=model.getNode(active);
+    // Selection rebuilds the nested list. Preserve focused row for keyboard
+    // activation instead of ejecting the user to document.body each time.
+    const oldFocus=document.activeElement?.closest?.('[data-tree-select]')?.dataset.treeSelect;
     tree.replaceChildren();
     function branch(parentId,target){
       for(const node of model.children(parentId)){
-        const li=document.createElement('li');li.setAttribute('role','treeitem');li.dataset.treeId=node.id;
-        li.setAttribute('aria-selected',String(node.id===active));
+        const li=document.createElement('li');li.dataset.treeId=node.id;
         const button=document.createElement('button');button.type='button';button.dataset.treeSelect=node.id;
         button.textContent=node.layerName;
         button.setAttribute('aria-pressed',String(node.id===active));
@@ -45,14 +47,17 @@ export function mountTreeWorkbench(host,model,canNest){
         });
         li.append(button);
         if(nodes.some(x=>x.parentId===node.id)){
-          li.setAttribute('aria-expanded','true');
-          const nested=document.createElement('ul');nested.setAttribute('role','group');
+          const nested=document.createElement('ul');
           branch(node.id,nested);li.append(nested);
         }
         target.append(li);
       }
     }
     branch(null,tree);
+    if(oldFocus){
+      const focused=[...tree.querySelectorAll('[data-tree-select]')].find(el=>el.dataset.treeSelect===oldFocus);
+      focused?.focus({preventScroll:true});
+    }
     layer.value=selected.layerName;
     typeName.value=selected.componentLabel;
     rendered.value=selected.renderedText;

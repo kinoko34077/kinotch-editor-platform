@@ -317,6 +317,21 @@ try{
   // M2 standalone visual adapter: tree view and provenance are actionable,
   // while the production GrapesJS model remains unmodified.
   await page.locator('#tree-workbench summary').click();
+  // Review P2: tree rows are vertical nested list items rather than globally
+  // inherited flex rows that squeeze a 4-level hierarchy into one line.
+  const upper=await page.locator('[data-tree-select="section-a"]').boundingBox();
+  const nested=await page.locator('[data-tree-select="section-b"]').boundingBox();
+  assert(upper&&nested&&nested.y>=upper.y+upper.height-2,
+    'Nested child must appear below its parent, not beside it');
+  // Review P2: keyboard Enter activation should preserve focus through redraw.
+  await page.locator('[data-tree-select="section-b"]').focus();
+  await page.locator('[data-tree-select="section-b"]').press('Enter');
+  assert.equal(await page.locator('[data-tree-select="section-b"]').evaluate(el=>document.activeElement===el),true,
+    'Tree keyboard activation lost its focused button');
+  await page.locator('[data-tree-select="card-a"]').focus();
+  await page.locator('[data-tree-select="card-a"]').press('F2');
+  assert.equal(await page.locator('[data-tree-field="layerName"]').evaluate(el=>document.activeElement===el),true,
+    'F2 should focus the editable layer name');
   assert.equal(await page.locator('#tree-navigator [data-tree-select]').count(),5,
     'M2 visual tree must show all nested nodes');
   await page.locator('[data-tree-select="section-a"]').click();
