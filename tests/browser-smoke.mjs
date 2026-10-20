@@ -34,6 +34,47 @@ try{
   assert.equal(await frame.locator('[data-spike-id="block-c"] strong').count(),0,'Editor parsed a user label as HTML');
   assert((await frame.locator('[data-spike-id="block-c"]').textContent()).includes('<strong>literal</strong>'),
     'Label was not rendered as literal text');
+  // Single click and additive Shift-click on canvas should *select*, not edit.
+  await frame.locator('[data-spike-id="block-c"]').click({position:{x:30,y:20}});
+  assert.equal(await page.locator('#canvas').getAttribute('data-selected-ids'),'block-c',
+    'Direct specimen click did not select C');
+  await frame.locator('[data-spike-id="block-a"]').click({position:{x:30,y:20},modifiers:['Shift']});
+  assert.deepEqual((await page.locator('#canvas').getAttribute('data-selected-ids')||'').split(',').sort(),
+    ['block-a','block-c'],'Shift-click on specimen failed additive selection');
+  // A group's Moveable drag overlay legitimately receives the pointer.
+  // Drive the *physical* click coordinate rather than Playwright's strict
+  // target-specific click, so our public-DOM click route can resolve the underlying node.
+  const aClickBox=await frame.locator('[data-spike-id="block-a"]').boundingBox();
+  assert(aClickBox,'Missing A rect for direct click through group overlay');
+  await page.mouse.move(aClickBox.x+32,aClickBox.y+23);
+  await page.mouse.down();await page.mouse.up();
+  assert.equal(await page.locator('#canvas').getAttribute('data-selected-ids'),'block-a',
+    'Direct canvas click must replace selected targets');
+  // A selected group's click can synthesize Moveable dragStart before click.
+  // Keyboard nudge must still work afterward: no stranded GestureGate.
+  await page.getByRole('button',{name:'JSONを表示'}).click();
+  const afterClick=JSON.parse(await page.locator('#dump').textContent());
+  const aClickGeom=afterClick.elements.find(e=>e.id==='block-a').geometry;
+  const layerA=page.locator('#layers [data-select-id="block-a"]');
+  await layerA.focus();await layerA.press('ArrowRight');
+  await page.getByRole('button',{name:'JSONを表示'}).click();
+  const nudgeAfterClick=JSON.parse(await page.locator('#dump').textContent());
+  assert.equal(nudgeAfterClick.elements.find(e=>e.id==='block-a').geometry.x,aClickGeom.x+1,
+    'Click left exclusive GestureGate active and blocked subsequent keyboard edit');
+  await page.getByRole('button',{name:'元に戻す'}).click();
+  // Repeated synthetic arrow keydown events must not flood the Undo stack.
+  await layerA.focus();
+  await page.getByRole('button',{name:'JSONを表示'}).click();
+  await layerA.focus();
+  const revisionBeforeRepeat=JSON.parse(await page.locator('#dump').textContent()).revision;
+  await layerA.evaluate(el=>{
+    for(let i=0;i<80;i++){
+      el.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowRight',repeat:true,bubbles:true,cancelable:true}));
+    }
+  });
+  await page.getByRole('button',{name:'JSONを表示'}).click();
+  const repeatState=JSON.parse(await page.locator('#dump').textContent());
+  assert.equal(repeatState.revision,revisionBeforeRepeat,'Auto-repeat created unwanted history entries');
   const controls=await frame.locator('.moveable-control-box').count();
   assert(controls>0,'Moveable controls not attached inside GrapesJS iframe');
   await page.getByRole('button',{name:'JSONを表示'}).click();
@@ -42,6 +83,25 @@ try{
   assert.equal(json.schema,'m0-layout-poc.v1');
   // An actual pointer interaction is needed; frame boot alone does not prove editing.
   const original=json.elements.find(e=>e.id==='block-a').geometry;
+  // Keyboard-only focused layer nudge and resize use the SAME model history.
+  const focusButton=page.locator('#layers [data-select-id="block-a"]');
+  await focusButton.focus();await focusButton.press('ArrowRight');
+  await page.getByRole('button',{name:'JSONを表示'}).click();
+  let keyJSON=JSON.parse(await page.locator('#dump').textContent());
+  assert.equal(keyJSON.elements.find(e=>e.id==='block-a').geometry.x,original.x+1,'ArrowRight did not nudge selected target');
+  await focusButton.focus();await focusButton.press('Alt+Shift+ArrowDown');
+  await page.getByRole('button',{name:'JSONを表示'}).click();
+  keyJSON=JSON.parse(await page.locator('#dump').textContent());
+  assert.equal(keyJSON.elements.find(e=>e.id==='block-a').geometry.height,original.height+10,
+    'Alt+Shift+ArrowDown did not resize height 10px');
+  await page.getByRole('button',{name:'元に戻す'}).click();
+  await page.getByRole('button',{name:'元に戻す'}).click();
+  await page.getByRole('button',{name:'JSONを表示'}).click();
+  keyJSON=JSON.parse(await page.locator('#dump').textContent());
+  assert.deepEqual(keyJSON.elements.find(e=>e.id==='block-a').geometry,original,'Keyboard Undo two transactions did not restore geometry');
+  assert.equal(await frame.locator('[data-spike-id="block-a"]').evaluate(el=>parseFloat(getComputedStyle(el).left)),
+    original.x,'Keyboard Undo left stale CSS');
+
   const rect=await frame.locator('[data-spike-id="block-a"]').boundingBox();
   assert(rect && rect.width>10 && rect.height>10,'Cannot locate draggable specimen');
   const startX=rect.x+rect.width/2;
@@ -314,6 +374,7 @@ try{
   await page.locator('#host-entry').focus();
   await page.locator('#host-entry').press('Control+z');
   assert.equal(await page.locator('#status').textContent(),hostStatus,'Editor hijacked host text input Undo');
+  const originalGrapesNodes=await frame.locator('[data-spike-id]').evaluateAll(els=>els.map(x=>x.dataset.spikeId));
   // M2 standalone visual adapter: tree view and provenance are actionable,
   // while the production GrapesJS model remains unmodified.
   await page.locator('#tree-workbench summary').click();
@@ -371,7 +432,7 @@ try{
   assert.equal(await page.locator('[data-tree-parent] option[value="card-a"]').count(),0,
     'Tree must not offer illegal self-parent drop');
   await page.locator('[data-tree-parent]').selectOption('section-a');
-  assert.equal(await page.locator('[data-tree-select="section-a"] + ul [data-tree-select="card-a"]').count(),1,
+  assert.equal(await page.locator('[data-tree-select="section-a"] + ul > li > [data-tree-select="card-a"]').count(),1,
     'Child should be nested directly under new legal parent');
   assert.equal(await page.locator('[data-tree-field="spacing"]').inputValue(),'44');
   assert.equal(await page.locator('[data-tree-source]').getAttribute('data-tree-source-id'),'section-a');
@@ -379,8 +440,9 @@ try{
   assert.equal(await page.locator('[data-tree-field="spacing"]').inputValue(),'77',
     'Undo parent move must restore nearest inherited ancestor');
   assert.equal(await page.locator('[data-tree-source]').getAttribute('data-tree-source-id'),'section-b');
-
-      assert.deepEqual(errors,[],'Browser uncaught exceptions: '+errors.join('; '));
+  assert.deepEqual(await frame.locator('[data-spike-id]').evaluateAll(els=>els.map(x=>x.dataset.spikeId)),originalGrapesNodes,
+    'M2 isolated tree panel unexpectedly changed the existing GrapesJS document');
+    assert.deepEqual(errors,[],'Browser uncaught exceptions: '+errors.join('; '));
   console.log(JSON.stringify({status:'BROWSER_BOOT_SMOKE_PASS',specimens,moveableControls:controls},null,2));
 }finally{
   if(browser)await browser.close();
