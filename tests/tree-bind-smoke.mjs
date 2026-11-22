@@ -92,13 +92,26 @@ try{
    const saved=JSON.parse(JSON.stringify(editor.getProjectData()));
    await editor.loadProjectData(saved);
  });
- assert.equal(await target.locator('[data-tree-node-id]').count(),5,'model reload lost elements');
- assert((await item('card-a').textContent()).includes('<strong>safe</strong>'),
+ // loadProjectData replaces the editor canvas iframe. The previous Frame is
+ // detached by design; rediscover the actual new GrapesJS rendered frame.
+ let reloadFrame;
+ for(let attempt=0;attempt<40&&!reloadFrame;attempt++){
+   for(const frame of page.frames().filter(x=>x!==page.mainFrame())){
+     const count=await frame.locator('[data-tree-node-id]').count().catch(()=>0);
+     if(count===5){reloadFrame=frame;break;}
+   }
+   if(!reloadFrame)await pause(100);
+ }
+ assert(reloadFrame,'project reload did not create a new GrapesJS hierarchy');
+ const reloadItem=id=>reloadFrame.locator('[data-tree-node-id="'+id+'"]');
+ assert.equal(await reloadFrame.locator('[data-tree-node-id]').count(),5,'model reload lost elements');
+ assert((await reloadItem('card-a').textContent()).includes('<strong>safe</strong>'),
    'model reload lost rendered text');
- assert.equal(await item('card-a').locator('strong').count(),0,
+ assert.equal(await reloadItem('card-a').locator('strong').count(),0,
    'model reload executed literal markup');
- assert.equal(await padding('card-a'),77,'model reload lost projected spacing');
- assert.equal(await item('card-a').getAttribute('data-tree-source-id'),'section-b',
+ assert.equal(await reloadItem('card-a').evaluate(el=>parseFloat(getComputedStyle(el).paddingLeft)),
+   77,'model reload lost projected spacing');
+ assert.equal(await reloadItem('card-a').getAttribute('data-tree-source-id'),'section-b',
    'model reload lost provenance');
 
  assert.deepEqual(errors,[],'uncaught browser errors');
