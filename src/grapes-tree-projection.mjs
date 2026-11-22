@@ -57,7 +57,7 @@ export function createGrapesTreeProjection(editor){
       if(!span||span.getAttributes()['data-tree-text-for']!==item.id)
         throw new Error('tree text component missing: '+item.id);
       const text=span.components().at(0);
-      if(!text||!text.is('textnode'))
+      if(!text||text.get('type')!=='textnode')
         throw new Error('tree literal text node missing: '+item.id);
       text.set('content',item.renderedText);
       cmp.addStyle({padding:eff.value+'px'});
