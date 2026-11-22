@@ -25,7 +25,7 @@ const editor=grapesjs.init({
     components:[{type:'textnode',content:item.label}]
   }))
 });
-editor.on('load',()=>{
+editor.on('load',async()=>{
   try{
     const body=editor.Canvas.getBody();
     const all=[...body.querySelectorAll('[data-perf-id]')];
@@ -36,26 +36,45 @@ editor.on('load',()=>{
     if(!element||!component)throw new Error('target unavailable in GrapesJS');
     const before=model.elements.find(x=>x.id===id).geometry;
     const after={...before,x:before.x+19,width:before.width+11};
+    // Two requestAnimationFrame boundaries plus a layout read separate the
+    // old synchronous JS-only timings from browser-visible style/layout work.
+    // This is headless Chrome frame/layout evidence, NOT exact paint or an SLA.
+    const nextLayout=()=>new Promise(resolve=>
+      requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+    const measure=()=>({
+      x:parseFloat(getComputedStyle(element).left),
+      width:parseFloat(getComputedStyle(element).width)
+    });
+    const assertComponentStyle=geometry=>{
+      const style=component.getStyle();
+      if(style.left!==geometry.x+'px'||style.width!==geometry.width+'px')
+        throw new Error('GrapesJS canonical component style was not updated');
+    };
     const t0=performance.now();
     if(!model.update(id,after))throw new Error('model update was no-op');
     component.addStyle({left:after.x+'px',width:after.width+'px'});
-    Object.assign(element.style,{left:after.x+'px',width:after.width+'px'});
-    const writeMs=performance.now()-t0;
-    const measure=()=>({x:parseFloat(getComputedStyle(element).left),width:parseFloat(getComputedStyle(element).width)});
+    assertComponentStyle(after);
+    await nextLayout();
     const committed=measure();
-    if(committed.x!==after.x||committed.width!==after.width)throw new Error('commit DOM/model mismatch');
+    const writeAndLayoutMs=performance.now()-t0;
+    if(committed.x!==after.x||committed.width!==after.width)
+      throw new Error('commit GrapesJS CSS/model mismatch');
     const t1=performance.now();
     if(!model.undo())throw new Error('Undo unavailable');
     component.addStyle({left:before.x+'px',width:before.width+'px'});
-    Object.assign(element.style,{left:before.x+'px',width:before.width+'px'});
-    const undoMs=performance.now()-t1;
+    assertComponentStyle(before);
+    await nextLayout();
     const restored=measure();
-    if(restored.x!==before.x||restored.width!==before.width)throw new Error('Undo DOM mismatch');
+    const undoAndLayoutMs=performance.now()-t1;
+    if(restored.x!==before.x||restored.width!==before.width)
+      throw new Error('Undo GrapesJS CSS/model mismatch');
     if(model.elements.length!==N||model.revision!==2)throw new Error('incorrect model state');
     const metrics={environment:'Chrome/headless (machine-reported; not physical Safari)',
       domCount:all.length,modelCount:N,initialMs:Math.round(initialMs*100)/100,
-      writeMs:Math.round(writeMs*100)/100,undoMs:Math.round(undoMs*100)/100,
-      computedGeometryVerified:true,revision:model.revision};
+      writeAndLayoutMs:Math.round(writeAndLayoutMs*100)/100,
+      undoAndLayoutMs:Math.round(undoAndLayoutMs*100)/100,
+      computedGeometryVerified:true,grapesModelStyleVerified:true,
+      frameAndLayoutIncluded:true,revision:model.revision};
     document.querySelector('#bench').dataset.perfMetrics=JSON.stringify(metrics);
     document.querySelector('#status').textContent='PERF_DOM_PASS';
   }catch(error){document.querySelector('#status').textContent='PERF_DOM_FAIL: '+String(error.message);}
