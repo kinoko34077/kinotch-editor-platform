@@ -10,7 +10,8 @@
     "check": "npm run test && npm run build",
     "test:browser": "node tests/browser-smoke.mjs",
     "check:licenses": "node scripts/check-dependency-licenses.mjs",
-    "test:mobile:chrome": "node tests/responsive-smoke.mjs"
+    "test:mobile:chrome": "node tests/responsive-smoke.mjs",
+    "test:perf:chrome": "node tests/perf-dom-smoke.mjs"
   },
   "dependencies": {
     "grapesjs": "0.23.6",
