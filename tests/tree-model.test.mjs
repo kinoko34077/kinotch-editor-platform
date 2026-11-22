@@ -152,6 +152,13 @@ test('projection failure restores canonical revision and Undo/Redo history',()=>
   assert.equal(m.effective('card-a','spacing').value,18,'rollback damaged prior redo');
   assert.throws(()=>m.transact(()=>m.move('section-a','card-a'),()=>{}),/invalid drop container/);
   assert.equal(m.effective('card-a','spacing').value,18,'invalid model mutation changed state');
+  const current=m.exportJSON();
+  assert.throws(()=>m.transact(()=>{
+    m.setOverride('card-a','spacing',32);
+    m.move('section-a','card-a'); // invalid after the first valid edit
+  },()=>{}),/invalid drop container/);
+  assert.equal(m.exportJSON(),current,'multi-step rejected mutation partially committed');
+
 });
 
 test('failed view recovery is distinguished from a rolled-back successful view',()=>{
