@@ -27,7 +27,8 @@ export function createGrapesTreeProjection(editor){
         attributes:{'data-tree-node-id':item.id},
         draggable:false,resizable:false,removable:false,copyable:false,stylable:false,selectable:false,
         style:{display:'block',border:'1px solid #8dafaa',margin:'4px',minHeight:'25px',boxSizing:'border-box'},
-        components:[{tagName:'span',attributes:{'data-tree-text-for':item.id},components:[]}]
+        components:[{tagName:'span',attributes:{'data-tree-text-for':item.id},
+          components:[{type:'textnode',content:item.renderedText}]}]
       });
       if(!made?.[0])throw new Error('GrapesJS failed to append '+item.id);
       components.set(item.id,made[0]);
@@ -50,15 +51,21 @@ export function createGrapesTreeProjection(editor){
       const cmp=components.get(item.id);
       cmp.set('name',item.componentLabel);
       const eff=model.effective(item.id,'spacing');
+      // All visible state must be owned by GrapesJS components, not by
+      // transient iframe DOM. Component models are the serialization source.
+      const span=cmp.components().at(0);
+      if(!span||span.getAttributes()['data-tree-text-for']!==item.id)
+        throw new Error('tree text component missing: '+item.id);
+      const text=span.components().at(0);
+      if(!text||!text.is('textnode'))
+        throw new Error('tree literal text node missing: '+item.id);
+      text.set('content',item.renderedText);
       cmp.addStyle({padding:eff.value+'px'});
-      const dom=cmp.getEl();
-      if(!dom)throw new Error('GrapesJS DOM missing after projection: '+item.id);
-      dom.style.padding=eff.value+'px';
-      dom.dataset.treeOrigin=eff.origin;
-      dom.dataset.treeSourceId=eff.sourceId??'';
-      const text=[...dom.querySelectorAll('[data-tree-text-for]')].find(x=>x.dataset.treeTextFor===item.id);
-      if(!text)throw new Error('tree text span missing: '+item.id);
-      text.textContent=item.renderedText;
+      cmp.addAttributes({
+        'data-tree-origin':eff.origin,
+        'data-tree-source-id':eff.sourceId??''
+      });
+      if(!cmp.getEl())throw new Error('GrapesJS DOM missing after projection: '+item.id);
     }
     return {nodes:nodes.length,revision:model.revision};
   }
