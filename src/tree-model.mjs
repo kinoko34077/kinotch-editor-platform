@@ -202,16 +202,20 @@ export function createTreeModel(initial,registry){
     if(typeof mutate!=='function'||typeof project!=='function')
       throw new TypeError('transaction requires mutation and projection');
     const checkpoint={
-      nodes:clone(current),revision,undo:clone(undo),redo:clone(redo)
+      nodes:clone(current),revision,undo:undo.slice(),redo:redo.slice()
     };
-    // Model methods validate and commit atomically themselves.
-    mutate();
-    try{return project();}
-    catch(error){
+    const restore=()=>{
       current=checkpoint.nodes;
       revision=checkpoint.revision;
       undo.splice(0,undo.length,...checkpoint.undo);
       redo.splice(0,redo.length,...checkpoint.redo);
+    };
+    // Even a multi-step mutator must not leave partially committed state.
+    try{mutate();}
+    catch(error){restore();throw error;}
+    try{return project();}
+    catch(error){
+      restore();
       try{project();}
       catch(restoreError){
         const failure=new Error('projection failed and view recovery failed',{cause:restoreError});
