@@ -32,6 +32,22 @@ try{
  assert.equal(await target.locator('[data-tree-node-id]').count(),5,'GrapesJS actual DOM node count');
  assert.equal(await item('card-a').locator('strong').count(),0,'Rendered text must not be parsed HTML');
  assert((await item('card-a').textContent()).includes('<strong>safe</strong>'),'literal text lost');
+ // GrapesJS, not the transient iframe DOM, must own exportable text and metadata.
+ const grapeshot=await page.evaluate(()=>{
+   const editor=window.__treeBinding.editor;
+   const cmp=editor.getWrapper().find('[data-tree-node-id="card-a"]')[0];
+   return {
+     text:cmp.components().at(0).components().at(0).get('content'),
+     style:cmp.getStyle(),attributes:cmp.getAttributes(),
+     projectJSON:JSON.stringify(editor.getProjectData()),html:editor.getHtml()
+   };
+ });
+ assert.equal(grapeshot.text,'literal <strong>safe</strong>','text missing from GrapesJS model');
+ assert.equal(grapeshot.style.padding,'4px','spacing missing from GrapesJS model');
+ assert.equal(grapeshot.attributes['data-tree-origin'],'type','provenance missing from model');
+ assert.equal(grapeshot.attributes['data-tree-source-id'],'card','source ID missing from model');
+ assert(grapeshot.projectJSON.includes('literal <strong>safe</strong>'),'project save omits literal text');
+ assert(!grapeshot.html.includes('<strong>safe</strong>'),'literal text exported as active markup');
  const nestedBefore=await item('card-a').evaluate(el=>el.parentElement?.dataset?.treeNodeId);
  assert.equal(nestedBefore,'section-b','Card A should physically nest inside Section B');
  const padding=id=>item(id).evaluate(el=>parseFloat(getComputedStyle(el).paddingLeft));
@@ -53,12 +69,38 @@ try{
  assert.equal(await item('card-a').evaluate(el=>el.parentElement?.dataset?.treeNodeId),'section-b',
    'Undo must restore actual GrapesJS nested parent');
  assert.equal(await padding('card-a'),77,'Undo must restore computed ancestor value');
+ const beforeFailure=await page.evaluate(()=>window.__treeBinding.model.exportJSON());
+ await page.locator('[data-tree-cmd="out-of-range"]').click();
+ assert.match(await page.locator('#tree-bind-status').textContent(),/^ROLLED_BACK:/);
+ assert.equal(await page.evaluate(()=>window.__treeBinding.model.exportJSON()),beforeFailure,
+   'projection failure left canonical state advanced');
+ assert.equal(await padding('card-a'),77,'projection failure changed visible DOM');
+ const modelPadding=await page.evaluate(()=>{
+   const editor=window.__treeBinding.editor;
+   return editor.getWrapper().find('[data-tree-node-id="card-a"]')[0].getStyle().padding;
+ });
+ assert.equal(modelPadding,'77px','GrapesJS style model did not retain inherited value');
  const before=await page.evaluate(()=>window.__treeBinding.model.revision);
  await page.locator('[data-tree-cmd="invalid"]').click();
  assert.match(await page.locator('#tree-bind-status').textContent(),/^REJECTED:/);
  assert.equal(await page.evaluate(()=>window.__treeBinding.model.revision),before,'invalid move wrote to canonical state');
  assert.equal(await item('card-a').evaluate(el=>el.parentElement?.dataset?.treeNodeId),'section-b',
    'invalid move changed DOM');
+ // Simulate actual project serialization/reload, not only live DOM appearance.
+ await page.evaluate(async()=>{
+   const editor=window.__treeBinding.editor;
+   const saved=JSON.parse(JSON.stringify(editor.getProjectData()));
+   await editor.loadProjectData(saved);
+ });
+ assert.equal(await target.locator('[data-tree-node-id]').count(),5,'model reload lost elements');
+ assert((await item('card-a').textContent()).includes('<strong>safe</strong>'),
+   'model reload lost rendered text');
+ assert.equal(await item('card-a').locator('strong').count(),0,
+   'model reload executed literal markup');
+ assert.equal(await padding('card-a'),77,'model reload lost projected spacing');
+ assert.equal(await item('card-a').getAttribute('data-tree-source-id'),'section-b',
+   'model reload lost provenance');
+
  assert.deepEqual(errors,[],'uncaught browser errors');
  console.log('TREE_GRAPES_BIND_PASS '+JSON.stringify({nodes:5,depth:4,physicalParentMove:true,
    dynamicCSSInheritance:true,undo:true,unsafeHTMLInert:true}));
