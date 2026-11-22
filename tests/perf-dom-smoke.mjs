@@ -29,7 +29,12 @@ try{
   assert.equal(metrics.modelCount,3000);
   assert.equal(metrics.revision,2);
   assert.equal(metrics.computedGeometryVerified,true);
-  assert(metrics.initialMs>=0&&metrics.writeMs>=0&&metrics.undoMs>=0,'negative timer result');
+  assert.equal(metrics.grapesModelStyleVerified,true,'GrapesJS style model was not checked');
+  assert.equal(metrics.frameAndLayoutIncluded,true,'reported timings omit browser frame/layout');
+  assert(metrics.initialMs>=0&&metrics.writeAndLayoutMs>=0&&metrics.undoAndLayoutMs>=0,
+    'negative frame/layout timer result');
+  assert.equal(metrics.writeMs,undefined,'old JS-only write timing must not masquerade as render time');
+  assert.equal(metrics.undoMs,undefined,'old JS-only undo timing must not masquerade as render time');
   assert.deepEqual(errors,[],'Uncaught browser exceptions');
   console.log('GRAPESJS_3000_DOM_PASS '+JSON.stringify(metrics));
 }finally{
