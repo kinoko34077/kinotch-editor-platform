@@ -37,17 +37,22 @@ editor.on('load',()=>{
       btn.addEventListener('click',()=>{
         const cmd=btn.dataset.treeCmd;
         try{
-          if(cmd==='set-parent')model.setOverride('section-a','spacing',18);
-          else if(cmd==='set-child')model.setOverride('card-a','spacing',31);
-          else if(cmd==='reset-child')model.resetOverride('card-a','spacing');
-          else if(cmd==='set-near')model.setOverride('section-b','spacing',77);
-          else if(cmd==='move')model.move('card-a','section-a','card-b');
-          else if(cmd==='undo')model.undo();
-          else if(cmd==='invalid')model.move('section-a','card-a');
-          render();
-        }catch(error){output.textContent='REJECTED: '+error.message;}
+          model.transact(()=>{
+            if(cmd==='set-parent')model.setOverride('section-a','spacing',18);
+            else if(cmd==='set-child')model.setOverride('card-a','spacing',31);
+            else if(cmd==='reset-child')model.resetOverride('card-a','spacing');
+            else if(cmd==='set-near')model.setOverride('section-b','spacing',77);
+            else if(cmd==='move')model.move('card-a','section-a','card-b');
+            else if(cmd==='undo')model.undo();
+            else if(cmd==='invalid')model.move('section-a','card-a');
+            else if(cmd==='out-of-range')model.setOverride('section-a','spacing',9999);
+          },render);
+        }catch(error){
+          output.textContent=(error.recoveryFailed?'RECOVERY_FAILED: ':
+            error.projectionRollback?'ROLLED_BACK: ':'REJECTED: ')+error.message;
+        }
       });
     }
-    window.__treeBinding={model,projection}; // test-only; not consumer or SDK API
+    window.__treeBinding={model,projection,editor}; // test-only; not consumer or SDK API
   }catch(error){output.textContent='TREE_BOUND_FAIL: '+String(error.message);}
 });
