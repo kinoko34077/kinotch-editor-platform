@@ -129,3 +129,44 @@ test('invalid property name, numeric value, real sibling reorder, and total sour
   for(const n of huge)n.renderedText='x'.repeat(18000);
   assert.throws(()=>createTreeModel(huge,registry),/too large/);
 });
+
+test('projection failure restores canonical revision and Undo/Redo history',()=>{
+  const m=createTreeModel(fixture,registry);
+  m.setOverride('section-a','spacing',18);
+  const baseline=m.exportJSON(),rev=m.revision;
+  let projectionCalls=0;
+  assert.throws(()=>m.transact(
+    ()=>m.setOverride('section-a','spacing',9999),
+    ()=>{
+      projectionCalls++;
+      if(m.effective('section-a','spacing').value>500)throw new RangeError('projection display range');
+    }
+  ),error=>error.projectionRollback===true);
+  assert.equal(projectionCalls,2,'failed projection and recovered projection must both run');
+  assert.equal(m.exportJSON(),baseline,'rejected projection changed canonical snapshot');
+  assert.equal(m.revision,rev,'failed projection advanced model revision');
+  assert.equal(m.effective('card-a','spacing').value,18);
+  m.undo();
+  assert.equal(m.effective('card-a','spacing').value,4,'rollback damaged prior undo');
+  m.redo();
+  assert.equal(m.effective('card-a','spacing').value,18,'rollback damaged prior redo');
+  assert.throws(()=>m.transact(()=>m.move('section-a','card-a'),()=>{}),/invalid drop container/);
+  assert.equal(m.effective('card-a','spacing').value,18,'invalid model mutation changed state');
+  const current=m.exportJSON();
+  assert.throws(()=>m.transact(()=>{
+    m.setOverride('card-a','spacing',32);
+    m.move('section-a','card-a'); // invalid after the first valid edit
+  },()=>{}),/invalid drop container/);
+  assert.equal(m.exportJSON(),current,'multi-step rejected mutation partially committed');
+
+});
+
+test('failed view recovery is distinguished from a rolled-back successful view',()=>{
+  const m=createTreeModel(fixture,registry);
+  const snapshot=m.exportJSON();
+  assert.throws(()=>m.transact(
+    ()=>m.setOverride('section-a','spacing',18),
+    ()=>{throw new Error('synthetic view outage');}
+  ),error=>error.recoveryFailed===true);
+  assert.equal(m.exportJSON(),snapshot,'model is not restored on a view recovery failure');
+});

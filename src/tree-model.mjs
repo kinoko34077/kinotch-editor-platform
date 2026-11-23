@@ -195,12 +195,44 @@ export function createTreeModel(initial,registry){
       delete n.local[field];
     });
   }
+  // Apply a user edit and its external projection as one observable action.
+  // A projector may fail after a valid model mutation; restore its previous
+  // revision and Undo/Redo stacks before attempting to restore the view.
+  function transact(mutate,project){
+    if(typeof mutate!=='function'||typeof project!=='function')
+      throw new TypeError('transaction requires mutation and projection');
+    const checkpoint={
+      nodes:clone(current),revision,undo:undo.slice(),redo:redo.slice()
+    };
+    const restore=()=>{
+      current=checkpoint.nodes;
+      revision=checkpoint.revision;
+      undo.splice(0,undo.length,...checkpoint.undo);
+      redo.splice(0,redo.length,...checkpoint.redo);
+    };
+    // Even a multi-step mutator must not leave partially committed state.
+    try{mutate();}
+    catch(error){restore();throw error;}
+    try{return project();}
+    catch(error){
+      restore();
+      try{project();}
+      catch(restoreError){
+        const failure=new Error('projection failed and view recovery failed',{cause:restoreError});
+        failure.recoveryFailed=true;
+        throw failure;
+      }
+      const failure=new Error('projection failed; previous state restored',{cause:error});
+      failure.projectionRollback=true;
+      throw failure;
+    }
+  }
   return {
     get revision(){return revision;},
     get nodes(){return clone(current);},
     getNode(id){return clone(requireNode(current,id));},
     children(parentId){return clone(current.filter(n=>n.parentId===parentId));},
-    effective,rename,setOverride,resetOverride,move,
+    effective,rename,setOverride,resetOverride,move,transact,
     undo:()=>step(undo,redo),redo:()=>step(redo,undo),
     exportJSON(){return JSON.stringify({schema:'editor-tree-m2.v1',revision,nodes:current});}
   };

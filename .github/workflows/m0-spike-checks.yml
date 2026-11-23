@@ -9,6 +9,7 @@ on:
       - 'package-lock.json'
       - 'index.html'
       - 'performance.html'
+      - 'tree-bind.html'
       - 'docs/M0_SPIKE.md'
       - 'scripts/**'
       - 'docs/M0_LICENSE_INVENTORY.md'
@@ -41,3 +42,5 @@ jobs:
         run: npm run test:mobile:chrome
       - name: Actual 3000 GrapesJS iframe DOM measured smoke (not device SLA)
         run: npm run test:perf:chrome
+      - name: M2 GrapesJS nested component projection (isolated Chrome test)
+        run: npm run test:tree:chrome
